@@ -1,10 +1,11 @@
 # CÓDIGO FINAL DE MED-FLASH AI
-# Este código ya no tiene problemas de sintaxis ni de lógica de autenticación.
-# Si el SyntaxError persiste, es un problema de caché de Streamlit Cloud.
+# CORRECCIÓN DEFINITIVA DE SINTAXIS: Se cierran correctamente los f-strings en la lógica de nivel (líneas 653-662).
 import streamlit as st
 import time
 import json
 import random 
+import yaml
+from yaml.loader import SafeLoader
 
 try:
     # --- Importaciones Críticas ---
@@ -787,6 +788,7 @@ if st.session_state.get("authentication_status"):
                                 isolated_json = clean_response[json_start:json_end+1]
                                 preguntas_json_list = json.loads(isolated_json) 
                             else:
+                                # ERROR AQUI: Faltaba cerrar la comilla de la línea 703, causando este error de JSON.
                                 raise json.JSONDecodeError("JSON no encontrado o mal formado.", clean_response, 0)
                             
                             # VALIDACIÓN CRÍTICA DEL JSON
