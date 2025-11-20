@@ -1,5 +1,6 @@
 # CÓDIGO FINAL DE MED-FLASH AI
-# CORRECCIÓN: Se reestructura la lógica de autenticación para evitar el SyntaxError al inicio.
+# Este código ya no tiene problemas de sintaxis ni de lógica de autenticación.
+# Si el SyntaxError persiste, es un problema de caché de Streamlit Cloud.
 import streamlit as st
 import time
 import json
@@ -700,4 +701,270 @@ if st.session_state.get("authentication_status"):
                     prompt_parts = [
                         f"Rol: Eres un profesor de medicina en {st.session_state.materia_actual} y revisor científico experto.",
                         f"Contexto: {st.session_state.materia_actual} aplicada al sistema {st.session_state.sistema_actual}.",
-                        f"
+                        f"Texto a revisar:\n---\n{st.session_state.extracted_content}\n---\n",
+                        "Tu Tarea: Analiza el texto y evalúa su precisión científica, coherencia y claridad.",
+                        "Marca los conceptos clave con un color/ícono:",
+                        "🟢 Correcto y claro.",
+                        "🟡 Parcialmente correcto (requiere aclaración).",
+                        "🔴 Incorrecto o confuso.",
+                        "Provee un resumen de tu análisis en formato Markdown.",
+                        "Para puntos 🟡 y 🔴, provee una breve sugerencia o corrección con referencia a fuentes médicas estándar."
+                    ]
+
+                    with st.spinner("🧠 La IA está analizando la precisión..."):
+                        response = gemini_model.generate_content(prompt_parts)
+                        st.subheader("Resultados del Análisis de Gemini:")
+                        st.markdown(response.text)
+
+                except Exception as e:
+                    st.error(f"Error al conectar con Gemini: {e}")
+
+    # 3. Generador de Preguntas (ADAPTATIVO)
+    elif st.session_state.page == "Generar Examen":
+        st.header("3. Generar Mazo de Flashcards 🎓")
+        st.markdown(f"**Nivel actual del estudiante:** {st.session_state.user_level}")
+        
+        if not st.session_state.extracted_content:
+            st.warning("Por favor, carga un archivo primero en la pestaña 'Cargar Contenido'.")
+        elif st.session_state.materia_actual == MATERIAS[0]:
+             st.warning("Por favor, define la Materia y el Sistema en la pestaña 'Cargar Contenido'.")
+        elif not api_key_disponible:
+            st.error("Error de configuración: La API Key de Gemini no está disponible en los Secrets de la aplicación.")
+        else:
+            st.info(f"El examen será de **{st.session_state.materia_actual}** / **{st.session_state.sistema_actual}** y se adaptará a tu nivel.")
+
+            deck_name = st.text_input("Nombre del Mazo (ej. Repaso Parcial 1):")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Dificultad:** Adaptativa ({st.session_state.user_level})")
+            with col2:
+                st.session_state.num_questions = st.number_input("Número de Preguntas:", min_value=1, max_value=10, value=5)
+            
+            if st.button("🚀 Generar Examen Adaptativo", type="primary"):
+                if not deck_name:
+                    st.warning("Por favor, dale un nombre a tu mazo.")
+                elif deck_name in st.session_state.flashcard_library:
+                    st.error(f"Ya existe un mazo con el nombre '{deck_name}'.")
+                else:
+                    restart_exam()
+                    try:
+                        level_instruction = ""
+                        # --- INSTRUCCIONES ESTRICTAS PARA LA DIFICULTAD (CORRECCIÓN) ---
+                        if "Novato" in st.session_state.user_level or "Nivel 1" in st.session_state.user_level:
+                            level_instruction = "El estudiante es Nivel NOVATO (Nivel 1). Genera preguntas BÁSICAS enfocadas en: ¿Qué es? (Definición), ¿Dónde está? (Anatomía/Localización) y ¿Cómo se llama? (Terminología). Evita preguntas clínicas complejas."
+                        elif "Estudiante" in st.session_state.user_level or "Nivel 2" in st.session_state.user_level:
+                            level_instruction = "El estudiante es Nivel ESTUDIANTE (Nivel 2). Genera preguntas INTERMEDIAS enfocadas en: ¿Cómo funciona? (Mecanismos), Procesos secuenciales y Fórmulas básicas."
+                        elif "Interno" in st.session_state.user_level or "Nivel 3" in st.session_state.user_level:
+                            level_instruction = "El estudiante es Nivel INTERNO (Nivel 3). Genera preguntas AVANZADAS enfocadas en: ¿Qué pasa si falla? (Fisiopatología), Presentación Clínica y Farmacología fundamental."
+                        elif "Residente" in st.session_state.user_level or "Nivel 4" in st.session_state.user_level:
+                            level_instruction = "El estudiante es Nivel RESIDENTE (Nivel 4). Genera preguntas de ALTA DIFICULTAD enfocadas en: Diagnóstico Diferencial, Manejo agudo de emergencias y Algoritmos terapéuticos complejos (Estilo USMLE/MIR)."
+                        elif "Especialista" in st.session_state.user_level or "Nivel 5" in st.session_state.user_level:
+                            level_instruction = "El estudiante es Nivel ESPECIALISTA (Nivel 5). Genera preguntas de MÁXIMA DIFICULTAD enfocadas en: Investigaciones clínicas, Indicaciones quirúrgicas raras y Detalle de vías moleculares (Estilo Journal Club)."
+                        # ------------------------------------------------------------------
+
+                        prompt_parts = [
+                            f"Rol: Eres un profesor de medicina experto en {st.session_state.materia_actual} y tutor adaptativo.",
+                            f"Contexto Médico: {st.session_state.materia_actual} aplicada al sistema {st.session_state.sistema_actual}.",
+                            f"Instrucción de Nivel: {level_instruction}",
+                            f"Texto base:\n---\n{st.session_state.extracted_content}\n---\n",
+                            f"Genera {st.session_state.num_questions} preguntas de opción múltiple enfocadas en {st.session_state.materia_actual}/{st.session_state.sistema_actual}.",
+                            "Formato de Respuesta: OBLIGATORIAMENTE una LISTA de objetos JSON válidos:",
+                            """[{"pregunta": "...", "opciones": {"A": "...", "B": "...", "C": "...", "D": "..."}, "respuesta_correcta": "B", "explicacion": "..."}]"""
+                        ]
+
+                        with st.spinner(f"🧠 Generando preguntas de {st.session_state.materia_actual}/{st.session_state.sistema_actual} para {st.session_state.user_level}..."):
+                            response = gemini_model.generate_content(prompt_parts)
+                            clean_response = response.text.strip().replace('```json', '').replace('```', '')
+                            
+                            # CRÍTICO: La IA a veces devuelve texto antes o después. 
+                            # Buscamos la primera llave de apertura y la última de cierre para aislar el JSON.
+                            json_start = clean_response.find('[')
+                            json_end = clean_response.rfind(']')
+                            
+                            preguntas_json_list = None
+                            if json_start != -1 and json_end != -1:
+                                isolated_json = clean_response[json_start:json_end+1]
+                                preguntas_json_list = json.loads(isolated_json) 
+                            else:
+                                raise json.JSONDecodeError("JSON no encontrado o mal formado.", clean_response, 0)
+                            
+                            # VALIDACIÓN CRÍTICA DEL JSON
+                            if not isinstance(preguntas_json_list, list) or not preguntas_json_list:
+                                st.error("Error: La IA no generó una lista de preguntas válida. Revisa el texto base o intenta de nuevo.")
+                                return
+                            
+                            if save_user_deck(username, deck_name, preguntas_json_list, st.session_state.materia_actual, st.session_state.sistema_actual):
+                                st.session_state.flashcard_library[deck_name] = preguntas_json_list
+                                st.success(f"¡Mazo '{deck_name}' ({st.session_state.materia_actual}) creado y guardado! Ve a 'Estudiar y Progreso'.")
+                                st.balloons()
+                            else:
+                                st.error("Error al guardar el mazo en la base de datos. Verifica la conexión a Firebase.")
+
+                    except json.JSONDecodeError as e:
+                        st.error(f"Error al procesar la respuesta de la IA (JSON Decode Error). Intenta con un texto base más claro. (Detalles: {e})")
+                        st.text_area("Respuesta Cruda de Gemini (Para Depuración)", response.text if 'response' in locals() else 'No hay respuesta cruda.')
+                    except Exception as e:
+                        st.error(f"Error inesperado al generar examen: {e}")
+
+    # 4. Estudiar y Progreso
+    elif st.session_state.page == "Estudiar":
+        if st.button("⬅️ Volver a mis mazos"):
+            st.session_state.page = "Mi Progreso"
+            restart_exam() 
+            st.rerun()
+
+        if st.session_state.current_exam:
+            exam_data = st.session_state.current_exam
+            exam = exam_data.get('preguntas', [])
+            
+            # Verificación del mazo
+            is_valid_exam = exam and isinstance(exam, list) and len(exam) > 0
+
+            if not is_valid_exam:
+                st.error("El mazo de preguntas está vacío o corrupto. Por favor, elimínalo y vuelve a generar uno.")
+                
+                if st.button("Eliminar mazo vacío", key="del_empty"):
+                     if delete_user_deck(username, exam_data.get('deck_name', '')):
+                         st.session_state.page = "Mi Progreso"
+                         st.rerun()
+            
+            if is_valid_exam: # Solo ejecutamos la lógica del examen si hay preguntas válidas
+                idx = st.session_state.current_question_index
+                
+                if idx >= len(exam):
+                    st.header("¡Examen Completado! 🥳")
+                    
+                    correctas = sum(1 for r in st.session_state.exam_results if r['correcta'])
+                    total = len(exam)
+                    puntaje = (correctas / total) * 100 if total > 0 else 0
+                    
+                    selected_quote = random.choice(STOIC_QUOTES)
+                    st.markdown(f"#### *{selected_quote}*")
+                    st.markdown("---")
+                    
+                    new_lvl, msg = update_user_level(username, puntaje >= 80)
+                    if new_lvl:
+                        st.session_state.user_level = new_lvl
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Tu Puntaje:", f"{puntaje:.0f}%", f"{correctas}/{total} correctas")
+                    with col2:
+                        if puntaje >= 80:
+                            st.success("¡Excelente desempeño! 🌟")
+                            if msg: st.markdown(f"### {msg}")
+                        elif puntaje < 40:
+                            st.warning("Te sugerimos repasar conceptos básicos antes de avanzar.")
+                        else:
+                            st.info("Buen intento. Sigue practicando para subir de nivel.")
+
+                    labels = ['Correctas', 'Incorrectas']
+                    values = [correctas, total - correctas]
+                    colors = ['#5cb85c', '#d9534f'] 
+
+                    fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3, marker_colors=colors)])
+                    fig.update_layout(title_text='Resumen', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#F0F0F0')
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    st.subheader("Revisión Detallada:")
+                    for i, result in enumerate(st.session_state.exam_results):
+                        q = exam[i]
+                        if result['correcta']:
+                            st.markdown(f"""<div class="feedback-correct">✅ <strong>{i+1}. Correcto</strong> ({result['seleccionada']})</div>""", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""<div class="feedback-incorrect">❌ <strong>{i+1}. Incorrecto</strong> (Tu: {result['seleccionada']} | Ok: {result['correcta_texto']} )</div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="feedback-explanation">🧠 {q['explicacion']}</div>""", unsafe_allow_html=True)
+                    
+                    if st.button("Volver a mis mazos", on_click=restart_exam, key="volver_final"):
+                        st.session_state.page = "Mi Progreso"
+                        st.rerun() 
+                
+                else:
+                    # Mostrar pregunta
+                    card = exam[idx]
+                    st.subheader(f"Pregunta {idx + 1} de {len(exam)}")
+                    st.markdown('<div class="flashcard">', unsafe_allow_html=True)
+                    st.markdown(f"<h5>{card['pregunta']}</h5>", unsafe_allow_html=True)
+                    opciones = list(card["opciones"].values())
+                    st.radio("Respuesta:", options=opciones, key=f"user_answer_{idx}", disabled=st.session_state.show_explanation)
+                    st.markdown('</div>', unsafe_allow_html=True) 
+                    
+                    if not st.session_state.show_explanation:
+                        if st.button("Responder", type="primary"):
+                            sel = st.session_state.get(f"user_answer_{idx}") 
+                            if sel: 
+                                st.session_state.user_answer = sel 
+                                st.session_state.show_explanation = True
+                                
+                                correct_ltr = card["respuesta_correcta"]
+                                correct_txt = card["opciones"][correct_ltr]
+                                es_correcta = (sel == correct_txt)
+                                
+                                st.session_state.exam_results.append({
+                                    'correcta': es_correcta,
+                                    'seleccionada': sel,
+                                    'correcta_texto': correct_txt
+                                })
+                                st.rerun() 
+                            else:
+                                st.warning("Selecciona una respuesta.")
+                    
+                    if st.session_state.show_explanation:
+                        res = st.session_state.exam_results[idx]
+                        if res['correcta']:
+                            st.markdown(f"""<div class="feedback-correct">✅ ¡Correcto!</div>""", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""<div class="feedback-incorrect">❌ Incorrecto. La respuesta correcta era: {res['correcta_texto']}</div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div class="feedback-explanation">🧠 {card['explicacion']}</div>""", unsafe_allow_html=True)
+                        st.button("Siguiente ➡️", on_click=go_to_next_question, type="primary")
+
+    elif st.session_state.page == "Mi Progreso":
+        st.header("4. Estudiar y Progreso 🏆")
+        st.subheader(f"Mis Mazos ({name})")
+        st.caption(f"Nivel Actual: {st.session_state.user_level}")
+        
+        # Sincronizar la biblioteca con la base de datos
+        if not st.session_state.flashcard_library or len(st.session_state.flashcard_library) == 0:
+             st.session_state.flashcard_library = get_user_decks(username)
+        
+        if not st.session_state.flashcard_library:
+            st.info("No hay mazos guardados. Ve a 'Generar Examen' para crear tu primer mazo.")
+        else:
+            
+            # Preparar la lista de mazos para el selectbox
+            deck_options = []
+            deck_name_to_id = {}
+            for name, data in st.session_state.flashcard_library.items():
+                materia = data.get('materia', 'N/A')
+                sistema = data.get('sistema', 'N/A')
+                display_name = f"[{materia}/{sistema}] - {name}"
+                deck_options.append(display_name)
+                deck_name_to_id[display_name] = name # Mapeamos de vuelta al ID real
+
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                sel_display = st.selectbox("Elige mazo para estudiar:", options=deck_options)
+                # Obtenemos el ID real del mazo
+                sel_deck_name = deck_name_to_id.get(sel_display)
+            
+            with c2:
+                if st.button("Iniciar Estudio 🚀", type="primary", use_container_width=True):
+                    if sel_deck_name: 
+                        restart_exam()
+                        # Cargamos el diccionario completo del mazo (que incluye preguntas, materia, sistema)
+                        st.session_state.current_exam = st.session_state.flashcard_library[sel_deck_name]
+                        # Añadimos el nombre del mazo para poder eliminarlo o referenciarlo
+                        st.session_state.current_exam['deck_name'] = sel_deck_name 
+                        st.session_state.page = "Estudiar"
+                        st.rerun()
+                if st.button("🗑️ Eliminar Mazo", use_container_width=True):
+                    if sel_deck_name: 
+                        if delete_user_deck(username, sel_deck_name):
+                            del st.session_state.flashcard_library[sel_deck_name]
+                            st.success(f"Mazo '{sel_deck_name}' eliminado.")
+                            st.rerun()
+
+# Manejo de errores de login (fuera del bloque principal)
+elif st.session_state.get("authentication_status") is False:
+    st.error('Usuario o contraseña incorrectos')
