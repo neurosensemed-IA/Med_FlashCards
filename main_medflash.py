@@ -1,5 +1,5 @@
 # CÓDIGO FINAL DE MED-FLASH AI
-# CORRECCIÓN DEFINITIVA DE SINTAXIS: Se cierran correctamente los f-strings en la lógica de nivel (líneas 653-662).
+# CORRECCIÓN DEFINITIVA DE SINTAXIS: 'return' reemplazado por 'st.stop()' en el flujo principal.
 import streamlit as st
 import time
 import json
@@ -55,15 +55,15 @@ SYSTEM_VISUALS = {
     "Respiratorio": {"icon": "🫁", "color": "#46B9C7"},   # Azul cian
     "Nervioso Central": {"icon": "🧠", "color": "#A67CEF"}, # Púrpura
     "Nervioso Periférico": {"icon": "⚡", "color": "#FFD700"}, # Amarillo dorado
-    "Digestivo": {"icon": "🍔", "color": "#FFB347"},      # Naranja
+    "Digestivo": {"icon": "🍔", "color": "#FFB347"},       # Naranja
     "Renal (Urinario)": {"icon": "💧", "color": "#5C94FF"},    # Azul
     "Musculoesquelético": {"icon": "💪", "color": "#90EE90"},  # Verde claro
-    "Endocrino": {"icon": "🧬", "color": "#FF69B4"},      # Rosa fuerte
-    "Hematológico": {"icon": "🩸", "color": "#DC143C"},   # Rojo oscuro
+    "Endocrino": {"icon": "🧬", "color": "#FF69B4"},       # Rosa fuerte
+    "Hematológico": {"icon": "🩸", "color": "#DC143C"},    # Rojo oscuro
     "Inmunológico": {"icon": "🛡️", "color": "#1E90FF"},   # Azul brillante
-    "Reproductivo": {"icon": "🤰", "color": "#F5A6C1"},   # Rosa
-    "General": {"icon": "📚", "color": "#E0E0E0"},        # Gris
-    "Otro": {"icon": "❓", "color": "#4A4A4A"},           # Gris oscuro
+    "Reproductivo": {"icon": "🤰", "color": "#F5A6C1"},    # Rosa
+    "General": {"icon": "📚", "color": "#E0E0E0"},         # Gris
+    "Otro": {"icon": "❓", "color": "#4A4A4A"},            # Gris oscuro
     "Seleccionar Sistema": {"icon": "🩺", "color": "#F5A6C1"}, # Rosa principal
 }
 
@@ -794,7 +794,7 @@ if st.session_state.get("authentication_status"):
                             # VALIDACIÓN CRÍTICA DEL JSON
                             if not isinstance(preguntas_json_list, list) or not preguntas_json_list:
                                 st.error("Error: La IA no generó una lista de preguntas válida. Revisa el texto base o intenta de nuevo.")
-                                return
+                                st.stop() # <-- AQUÍ SE REALIZÓ LA CORRECCIÓN
                             
                             if save_user_deck(username, deck_name, preguntas_json_list, st.session_state.materia_actual, st.session_state.sistema_actual):
                                 st.session_state.flashcard_library[deck_name] = preguntas_json_list
