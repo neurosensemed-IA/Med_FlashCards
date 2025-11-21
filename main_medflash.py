@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión Corregida Dr. David)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión Completa con Verificación)
 import streamlit as st
 import time
 import json
@@ -33,19 +33,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed", 
 )
 
-# --- FRASES MOTIVACIONALES ---
-STOIC_QUOTES = [
-    "“El obstáculo es el camino.” — Marco Aurelio",
-    "“La dificultad es lo que despierta al genio.” — Séneca",
-    "“No es que tengamos poco tiempo, sino que perdemos mucho.” — Séneca",
-    "“La excelencia es un hábito, no es un acto.” — Aristóteles",
-    "“Un gramo de práctica vale más que una tonelada de teoría.”",
-    "“El éxito es la suma de pequeños esfuerzos repetidos día tras día.” — Robert Collier"
-]
-
 # --- VÍNCULOS VISUALES DINÁMICOS ---
 SYSTEM_VISUALS = {
-    # Sistemas Corporales
     "Cardiovascular": {"icon": "❤️", "color": "#FF5757"},
     "Respiratorio": {"icon": "🫁", "color": "#46B9C7"},
     "Nervioso Central": {"icon": "🧠", "color": "#A67CEF"},
@@ -57,27 +46,23 @@ SYSTEM_VISUALS = {
     "Hematológico": {"icon": "🩸", "color": "#DC143C"},
     "Inmunológico": {"icon": "🛡️", "color": "#1E90FF"},
     "Reproductivo": {"icon": "🤰", "color": "#F5A6C1"},
-    # Bioquímica y Celular
     "Metabolismo": {"icon": "🔥", "color": "#FF8C00"},
     "Enzimas/Proteínas": {"icon": "🧩", "color": "#32CD32"},
     "Genética/ADN": {"icon": "🧬", "color": "#8A2BE2"},
     "Biología Celular": {"icon": "🦠", "color": "#20B2AA"},
-    # Farmacología
     "Farmacocinética": {"icon": "📈", "color": "#FFD700"},
     "Farmacodinámica": {"icon": "🎯", "color": "#FF4500"},
     "Antibióticos": {"icon": "💊", "color": "#00CED1"},
-    # General
     "General": {"icon": "📚", "color": "#E0E0E0"},
     "Otro": {"icon": "❓", "color": "#4A4A4A"},
     "Seleccionar Sistema": {"icon": "🩺", "color": "#F5A6C1"},
 }
 
-# --- LÓGICA DE DEPENDENCIAS (MATERIA -> TEMAS) ---
 MATERIAS = [
-    "Seleccionar Materia", "Anatomía", "Fisiología", "Patología", "Semiología", # Clínicas
-    "Bioquímica", "Genética", "Biología Celular", # Moleculares
-    "Farmacología", "Microbiología", # Terapéutica/Bugs
-    "Pediatría", "Neurología", "Cardiología", "Medicina Interna" # Especialidades
+    "Seleccionar Materia", "Anatomía", "Fisiología", "Patología", "Semiología", 
+    "Bioquímica", "Genética", "Biología Celular", 
+    "Farmacología", "Microbiología", 
+    "Pediatría", "Neurología", "Cardiología", "Medicina Interna"
 ]
 
 SISTEMAS_CUERPO = [
@@ -98,25 +83,14 @@ TOPICOS_POR_MATERIA = {
 # --- ESTILOS CSS ---
 st.markdown("""
 <style>
-    :root {
-        --primary-color: #F5A6C1; --accent-gold: #FFD700; --delete-color: #DC143C; 
-        --text-color: #4A4A4A; --dark-bg: #1A1A1A; --dark-text: #F0F0F0; 
-    }
+    :root { --primary-color: #F5A6C1; --accent-gold: #FFD700; --delete-color: #DC143C; --text-color: #4A4A4A; --dark-bg: #1A1A1A; --dark-text: #F0F0F0; }
     body { background-color: var(--dark-bg); color: var(--dark-text); }
     .stApp { background-color: var(--dark-bg); }
-    .flashcard {
-        background-color: #2F2F2F; border-radius: 16px; padding: 24px; margin: 20px 0;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.6); border: 2px solid var(--accent-gold); color: var(--dark-text); 
-    }
+    .flashcard { background-color: #2F2F2F; border-radius: 16px; padding: 24px; margin: 20px 0; box-shadow: 0 8px 16px rgba(0,0,0,0.6); border: 2px solid var(--accent-gold); color: var(--dark-text); }
     .feedback-correct { background-color: #384238; border: 2px solid #5cb85c; border-radius: 12px; padding: 16px; margin-top: 10px; color: #E6F7E6; }
     .feedback-incorrect { background-color: #423838; border: 2px solid #d9534f; border-radius: 12px; padding: 16px; margin-top: 10px; color: #F7E6E6; }
-    .feedback-explanation {
-        background-color: #2D333B; border-left: 4px solid #5bc0de; border-radius: 8px; padding: 20px; margin-top: 15px; color: #E6F7F7; font-family: 'Segoe UI', sans-serif;
-    }
-    .doodle-container {
-        width: 100%; height: 150px; background-color: #2F2F2F; border-radius: 16px; display: flex; flex-direction: column; 
-        align-items: center; justify-content: center; margin-bottom: 20px; padding: 10px; border: 4px solid var(--system-color, var(--accent-gold));
-    }
+    .feedback-explanation { background-color: #2D333B; border-left: 4px solid #5bc0de; border-radius: 8px; padding: 20px; margin-top: 15px; color: #E6F7F7; font-family: 'Segoe UI', sans-serif; }
+    .doodle-container { width: 100%; height: 150px; background-color: #2F2F2F; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 20px; padding: 10px; border: 4px solid var(--system-color, var(--accent-gold)); }
     .doodle-container .system-icon { font-size: 4rem; line-height: 1; text-shadow: 0 0 5px rgba(255, 215, 0, 0.8); }
     .doodle-container .system-text { color: var(--dark-text); font-weight: bold; font-size: 0.85rem; }
 </style>
@@ -183,23 +157,22 @@ db = init_firebase()
 api_key_disponible = "GOOGLE_API_KEY" in st.secrets and st.secrets["GOOGLE_API_KEY"]
 gemini_model = None
 if api_key_disponible:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    gemini_model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-09-2025")
+    try:
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+        gemini_model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-09-2025")
+    except Exception as e:
+        pass # Se maneja luego si gemini_model es None
 
-# --- Funciones Usuario (CORREGIDO KEYERROR) ---
+# --- Funciones Usuario ---
 def get_all_users_credentials():
-    # Estructura mínima segura para evitar KeyError en stauth
     safe_return = {'usernames': {}}
-    
     if not db: return safe_return
     try:
         users_ref = db.collection('usuarios')
         docs = users_ref.stream()
         usernames_dict = {}
         for doc in docs:
-            data = doc.to_dict()
-            usernames_dict[doc.id] = data
-        
+            usernames_dict[doc.id] = doc.to_dict()
         if not usernames_dict: return safe_return
         return {'usernames': usernames_dict}
     except: return safe_return
@@ -235,9 +208,7 @@ def update_user_level(username, passed):
         if passed:
             xp += 10
             idx = levels.index(lvl) if lvl in levels else 0
-            if idx < 4: 
-                new_lvl = levels[idx+1]
-                msg = f"¡Nivel UP! Ahora eres: {new_lvl} 🌟"
+            if idx < 4: new_lvl = levels[idx+1]; msg = f"¡Nivel UP! Ahora eres: {new_lvl} 🌟"
         doc_ref.update({'level': new_lvl, 'xp': xp})
         return new_lvl, msg
     except: return None, None
@@ -267,7 +238,6 @@ def delete_user_deck(username, name):
 
 # --- AUTHENTICATOR SETUP ---
 credentials_data = get_all_users_credentials()
-
 config = {
     'credentials': credentials_data,
     'cookie': {'expiry_days': 30, 'key': 'medflash_key', 'name': 'medflash_cookie'},
@@ -318,9 +288,12 @@ elif st.session_state["authentication_status"]:
         """, unsafe_allow_html=True)
         st.markdown("---")
         if st.button("1. Cargar Contenido", use_container_width=True): st.session_state.page = "Cargar Contenido"
-        if st.button("2. Generar Examen", use_container_width=True): st.session_state.page = "Generar Examen"
-        if st.button("3. Estudiar", use_container_width=True): st.session_state.page = "Mi Progreso"
+        # SECCIÓN RECUPERADA:
+        if st.button("2. Verificación IA", use_container_width=True): st.session_state.page = "Verificación IA"
+        if st.button("3. Generar Examen", use_container_width=True): st.session_state.page = "Generar Examen"
+        if st.button("4. Estudiar", use_container_width=True): st.session_state.page = "Mi Progreso"
 
+    # --- PÁGINA 1: CARGAR ---
     if st.session_state.page == "Cargar Contenido":
         st.header("1. Contexto Clínico 📚")
         c1, c2 = st.columns(2)
@@ -343,16 +316,55 @@ elif st.session_state["authentication_status"]:
                     elif "presentation" in f.type: t = extraer_texto_pptx(f)
                     else: t = f.read().decode("utf-8")
                     st.session_state.extracted_content = t
-                    st.success("Texto extraído. Ve a 'Generar Examen'.")
+                    st.success("Texto extraído. Continúa a 'Verificación IA'.")
 
+    # --- PÁGINA 2: VERIFICACIÓN IA (RECUPERADA) ---
+    elif st.session_state.page == "Verificación IA":
+        st.header("2. Verificación Médica con IA 🔬")
+        if not st.session_state.extracted_content: st.warning("Carga un archivo primero."); st.stop()
+        
+        st.info(f"Analizando contenido de **{st.session_state.materia_actual} / {st.session_state.sistema_actual}**")
+        st.text_area("Contenido:", st.session_state.extracted_content[:2000]+"...", height=200)
+        
+        if st.button("🔬 Analizar Precisión Científica", type="primary"):
+            if not gemini_model:
+                st.error("❌ Error: No se detectó la API Key de Google en los secrets.")
+                st.stop()
+                
+            prompt = [
+                f"Rol: Profesor de medicina experto en {st.session_state.materia_actual}.",
+                f"Contexto: {st.session_state.materia_actual} - {st.session_state.sistema_actual}.",
+                f"Texto a revisar:\n{st.session_state.extracted_content[:15000]}", # Límite seguro
+                "Tarea: Evalúa la precisión científica y claridad.",
+                "Usa formato Markdown:",
+                "- 🟢 Puntos Clave Correctos.",
+                "- 🟡 Ambigüedades o puntos a mejorar.",
+                "- 🔴 Errores potenciales o falta de contexto.",
+                "Provee un resumen ejecutivo para el estudiante."
+            ]
+            
+            with st.spinner("La IA está auditando el contenido..."):
+                try:
+                    response = gemini_model.generate_content(prompt)
+                    st.markdown("### Informe de Auditoría IA")
+                    st.markdown(response.text)
+                except Exception as e:
+                    st.error(f"Error en análisis: {e}")
+
+    # --- PÁGINA 3: GENERAR EXAMEN ---
     elif st.session_state.page == "Generar Examen":
-        st.header("2. Generar Flashcards Visuales 🧠")
+        st.header("3. Generar Flashcards Visuales 🧠")
         if not st.session_state.extracted_content: st.warning("Carga un archivo primero."); st.stop()
         
         d_name = st.text_input("Nombre del Mazo (ej. Parcial Bioquímica)")
         num = st.slider("Preguntas", 1, 10, 5)
         
         if st.button("🚀 Crear con Feedback Visual", type="primary"):
+            # Protección contra error NoneType
+            if not gemini_model:
+                st.error("❌ Error Crítico: No se detectó la API Key. Configura 'GOOGLE_API_KEY' en .streamlit/secrets.toml")
+                st.stop()
+
             if not d_name: st.error("Pon un nombre al mazo."); st.stop()
             restart_exam()
             
@@ -383,8 +395,9 @@ elif st.session_state["authentication_status"]:
                         st.success("Mazo creado. Vamos a estudiar."); st.balloons()
                 except Exception as e: st.error(f"Error IA: {e}")
 
+    # --- PÁGINA 4: PROGRESO ---
     elif st.session_state.page == "Mi Progreso":
-        st.header("3. Biblioteca de Estudio 🏆")
+        st.header("4. Biblioteca de Estudio 🏆")
         decks = st.session_state.get("flashcard_library", {})
         if not decks: st.info("No tienes mazos."); st.stop()
         opts = [f"{k} [{v.get('materia','?')}]" for k,v in decks.items()]
@@ -401,6 +414,7 @@ elif st.session_state["authentication_status"]:
              del st.session_state.flashcard_library[real_name]
              st.rerun()
 
+    # --- PÁGINA 5: ESTUDIO ---
     elif st.session_state.page == "Estudiar":
         exam = st.session_state.current_exam.get('preguntas', [])
         idx = st.session_state.current_question_index
