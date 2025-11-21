@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Niveles por Materia)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión Definitiva - Auth Fix + Niveles)
 import streamlit as st
 import time
 import json
@@ -162,35 +162,62 @@ if api_key_disponible:
     except Exception as e:
         pass
 
-# --- Funciones Usuario (MODIFICADAS PARA NIVELES POR MATERIA) ---
+# --- Funciones Usuario (ARREGLO CRÍTICO DE LOGIN) ---
+
 def get_all_users_credentials():
-    safe_return = {'usernames': {}}
-    if not db: return safe_return
+    """Obtiene usuarios y asegura que drdavid siempre exista."""
+    # 1. Creamos el usuario base en memoria (Fallback seguro)
+    try:
+        # Generamos el hash en tiempo real con la librería actual
+        test_hash = Hasher(['123']).generate()[0] 
+    except Exception:
+        test_hash = "$2b$12$y.X.1.1.1.1.1.1.1.1.1.u.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1"
+
+    base_credentials = {
+        'usernames': {
+            'drdavid': {
+                'name': 'Dr. David',
+                'email': 'david@medflash.ai',
+                'password': test_hash,
+                'progreso': {},
+                'logged_in': False
+            }
+        }
+    }
+
+    if not db: return base_credentials
+
     try:
         users_ref = db.collection('usuarios')
         docs = users_ref.stream()
-        usernames_dict = {}
+        # Mezclamos los usuarios de la DB con el usuario base
         for doc in docs:
-            usernames_dict[doc.id] = doc.to_dict()
-        if not usernames_dict: return safe_return
-        return {'usernames': usernames_dict}
-    except: return safe_return
+            data = doc.to_dict()
+            if 'password' in data:
+                base_credentials['usernames'][doc.id] = data
+        return base_credentials
+    except Exception as e:
+        print(f"Error DB: {e}")
+        return base_credentials
 
 def register_new_user(name, email, username, password):
-    if not db: return "Error DB"
+    """Registra usando Hasher para evitar errores 'invalid credentials'."""
+    if not db: return "Error: Base de datos no conectada."
     try:
         doc_ref = db.collection('usuarios').document(username)
-        if doc_ref.get().exists: return "exists"
-        hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-        # Inicializamos 'progreso' como un mapa vacío
+        if doc_ref.get().exists: return "El usuario ya existe."
+        
+        # FIX: Usamos la misma librería Hasher para generar la contraseña
+        hashed_pw = Hasher([password]).generate()[0]
+        
         doc_ref.set({
             'name': name, 
             'email': email, 
             'password': hashed_pw, 
-            'progreso': {} # Diccionario para niveles por materia
+            'progreso': {} 
         })
         return "success"
-    except Exception as e: return str(e)
+    except Exception as e: return f"Error técnico: {str(e)}"
 
 def get_user_progress(username, materia):
     """Obtiene el nivel específico de la materia solicitada."""
@@ -200,12 +227,8 @@ def get_user_progress(username, materia):
         if doc.exists: 
             data = doc.to_dict()
             progreso = data.get('progreso', {})
-            
-            # Si existe progreso específico para esa materia, lo devolvemos
             if materia in progreso:
                 return progreso[materia]['level'], progreso[materia]['xp']
-            
-            # Fallback para usuarios antiguos o materias nuevas
             return "Nivel 1 (Novato)", 0
     except: pass
     return "Nivel 1 (Novato)", 0
@@ -218,29 +241,21 @@ def update_user_level(username, materia, passed):
         data = doc_ref.get().to_dict()
         progreso = data.get('progreso', {})
         
-        # Obtener estado actual de la materia
         if materia in progreso:
-            lvl = progreso[materia]['level']
-            xp = progreso[materia]['xp']
+            lvl = progreso[materia]['level']; xp = progreso[materia]['xp']
         else:
-            lvl = "Nivel 1 (Novato)"
-            xp = 0
+            lvl = "Nivel 1 (Novato)"; xp = 0
             
         levels = ["Nivel 1 (Novato)", "Nivel 2 (Estudiante)", "Nivel 3 (Interno)", "Nivel 4 (Residente)", "Nivel 5 (Especialista)"]
-        new_lvl = lvl
-        msg = ""
+        new_lvl = lvl; msg = ""
         
         if passed:
             xp += 10
             idx = levels.index(lvl) if lvl in levels else 0
-            if idx < 4: 
-                new_lvl = levels[idx+1]
-                msg = f"¡Subiste de nivel en {materia}! Ahora eres: {new_lvl} 🌟"
+            if idx < 4: new_lvl = levels[idx+1]; msg = f"¡Subiste de nivel en {materia}! Ahora eres: {new_lvl} 🌟"
         
-        # Guardamos de vuelta en el mapa de progreso
         progreso[materia] = {'level': new_lvl, 'xp': xp}
         doc_ref.update({'progreso': progreso})
-        
         return new_lvl, msg
     except: return None, None
 
@@ -297,15 +312,13 @@ elif st.session_state["authentication_status"]:
     name = st.session_state.get("name")
     
     # LÓGICA DE NIVEL POR MATERIA:
-    # Calculamos el nivel basado en la materia seleccionada actualmente
-    # Si es "Seleccionar Materia" o general, mostramos un placeholder o el nivel de "General"
     materia_display = st.session_state.materia_actual
     if materia_display == "Seleccionar Materia":
         nivel_actual = "Selecciona Materia"
     else:
         l, x = get_user_progress(username, materia_display)
         nivel_actual = l
-        st.session_state.user_level = nivel_actual # Actualizamos el estado global para que lo use la IA
+        st.session_state.user_level = nivel_actual 
 
     if st.session_state.get("last_login") != username:
         st.session_state.flashcard_library = get_user_decks(username)
@@ -316,7 +329,6 @@ elif st.session_state["authentication_status"]:
     
     with st.sidebar:
         st.title("Med-Flash AI")
-        # SIDEBAR DINÁMICO: Muestra el nivel específico de la materia actual
         st.markdown(f"**Dr. {name}**")
         if materia_display != "Seleccionar Materia":
             st.caption(f"Nivel en {materia_display}:")
@@ -346,9 +358,7 @@ elif st.session_state["authentication_status"]:
         with c1:
             mat = st.selectbox("Materia:", MATERIAS)
             st.session_state.materia_actual = mat
-            # Forzar recarga para actualizar el nivel en el sidebar inmediatamente
-            if mat != materia_display:
-                 st.rerun()
+            if mat != materia_display: st.rerun()
         with c2:
             if mat in TOPICOS_POR_MATERIA: ops = TOPICOS_POR_MATERIA[mat]
             elif mat == "Seleccionar Materia": ops = ["Selecciona Materia Primero"]
@@ -416,7 +426,6 @@ elif st.session_state["authentication_status"]:
             if not d_name: st.error("Pon un nombre al mazo."); st.stop()
             restart_exam()
             
-            # Usamos el nivel ESPECÍFICO de la materia en el prompt
             prompt = [
                 f"Eres profesor experto en {st.session_state.materia_actual} y diseñador instruccional médico.",
                 f"Tema: {st.session_state.sistema_actual}. Nivel Estudiante: {st.session_state.user_level} (En {st.session_state.materia_actual}).",
@@ -466,7 +475,7 @@ elif st.session_state["authentication_status"]:
     # --- PÁGINA 5: ESTUDIO ---
     elif st.session_state.page == "Estudiar":
         exam = st.session_state.current_exam.get('preguntas', [])
-        materia_examen = st.session_state.current_exam.get('materia', 'General') # Recuperar materia del mazo
+        materia_examen = st.session_state.current_exam.get('materia', 'General')
         idx = st.session_state.current_question_index
         
         if st.button("⬅ Volver"): st.session_state.page = "Mi Progreso"; restart_exam(); st.rerun()
@@ -497,11 +506,9 @@ elif st.session_state["authentication_status"]:
             final = (score / len(exam)) * 100
             st.metric("Resultado Final", f"{final:.0f}%")
             
-            # Actualizamos el nivel de LA MATERIA ESPECÍFICA DEL EXAMEN
             nl, msg = update_user_level(username, materia_examen, final >= 80)
             if msg: st.success(msg)
             
-            # Refrescamos la UI para que se vea el nuevo nivel si estamos en esa materia
             if materia_examen == st.session_state.materia_actual:
                 st.session_state.user_level = nl if nl else st.session_state.user_level
 
