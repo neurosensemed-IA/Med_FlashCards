@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión Definitiva - Auth Fix + Niveles)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión Híbrida: Online + Offline Fallback)
 import streamlit as st
 import time
 import json
@@ -31,6 +31,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed", 
 )
+
+# --- INICIALIZACIÓN DE MEMORIA OFFLINE (FALLBACK) ---
+if 'offline_db' not in st.session_state:
+    st.session_state.offline_db = {
+        'users': {},
+        'decks': {}
+    }
 
 # --- VÍNCULOS VISUALES DINÁMICOS ---
 SYSTEM_VISUALS = {
@@ -162,13 +169,11 @@ if api_key_disponible:
     except Exception as e:
         pass
 
-# --- Funciones Usuario (ARREGLO CRÍTICO DE LOGIN) ---
+# --- CAPA DE DATOS HÍBRIDA (ONLINE + OFFLINE FALLBACK) ---
 
 def get_all_users_credentials():
-    """Obtiene usuarios y asegura que drdavid siempre exista."""
-    # 1. Creamos el usuario base en memoria (Fallback seguro)
+    """Carga usuarios de DB o de memoria offline."""
     try:
-        # Generamos el hash en tiempo real con la librería actual
         test_hash = Hasher(['123']).generate()[0] 
     except Exception:
         test_hash = "$2b$12$y.X.1.1.1.1.1.1.1.1.1.u.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1"
@@ -185,81 +190,115 @@ def get_all_users_credentials():
         }
     }
 
-    if not db: return base_credentials
+    # 1. Cargar desde Memoria Offline (Prioridad local)
+    if 'offline_db' in st.session_state:
+        for u, data in st.session_state.offline_db['users'].items():
+            base_credentials['usernames'][u] = data
 
-    try:
-        users_ref = db.collection('usuarios')
-        docs = users_ref.stream()
-        # Mezclamos los usuarios de la DB con el usuario base
-        for doc in docs:
-            data = doc.to_dict()
-            if 'password' in data:
-                base_credentials['usernames'][doc.id] = data
-        return base_credentials
-    except Exception as e:
-        print(f"Error DB: {e}")
-        return base_credentials
+    # 2. Cargar desde Firebase (Si existe)
+    if db:
+        try:
+            users_ref = db.collection('usuarios')
+            docs = users_ref.stream()
+            for doc in docs:
+                data = doc.to_dict()
+                if 'password' in data:
+                    base_credentials['usernames'][doc.id] = data
+        except Exception as e:
+            print(f"Error DB: {e}")
+
+    return base_credentials
 
 def register_new_user(name, email, username, password):
-    """Registra usando Hasher para evitar errores 'invalid credentials'."""
-    if not db: return "Error: Base de datos no conectada."
+    """Registra en DB o en memoria offline si DB falla."""
+    hashed_pw = Hasher([password]).generate()[0]
+    user_data = {
+        'name': name, 
+        'email': email, 
+        'password': hashed_pw, 
+        'progreso': {} 
+    }
+
+    # Intento Offline (Si no hay DB)
+    if not db:
+        if username in st.session_state.offline_db['users']:
+            return "El usuario ya existe (Offline)."
+        st.session_state.offline_db['users'][username] = user_data
+        return "success"
+
+    # Intento Online (Firebase)
     try:
         doc_ref = db.collection('usuarios').document(username)
         if doc_ref.get().exists: return "El usuario ya existe."
-        
-        # FIX: Usamos la misma librería Hasher para generar la contraseña
-        hashed_pw = Hasher([password]).generate()[0]
-        
-        doc_ref.set({
-            'name': name, 
-            'email': email, 
-            'password': hashed_pw, 
-            'progreso': {} 
-        })
+        doc_ref.set(user_data)
         return "success"
-    except Exception as e: return f"Error técnico: {str(e)}"
+    except Exception as e:
+        return f"Error técnico: {str(e)}"
 
 def get_user_progress(username, materia):
-    """Obtiene el nivel específico de la materia solicitada."""
+    # 1. Buscar Offline
+    if 'offline_db' in st.session_state and username in st.session_state.offline_db['users']:
+        progreso = st.session_state.offline_db['users'][username].get('progreso', {})
+        if materia in progreso: return progreso[materia]['level'], progreso[materia]['xp']
+        return "Nivel 1 (Novato)", 0
+
+    # 2. Buscar Online
     if not db: return "Nivel 1 (Novato)", 0
     try:
         doc = db.collection('usuarios').document(username).get()
         if doc.exists: 
             data = doc.to_dict()
             progreso = data.get('progreso', {})
-            if materia in progreso:
-                return progreso[materia]['level'], progreso[materia]['xp']
-            return "Nivel 1 (Novato)", 0
+            if materia in progreso: return progreso[materia]['level'], progreso[materia]['xp']
     except: pass
     return "Nivel 1 (Novato)", 0
 
 def update_user_level(username, materia, passed):
-    """Actualiza el nivel SOLO de la materia estudiada."""
+    levels = ["Nivel 1 (Novato)", "Nivel 2 (Estudiante)", "Nivel 3 (Interno)", "Nivel 4 (Residente)", "Nivel 5 (Especialista)"]
+    new_lvl = None
+    msg = ""
+
+    # Función lógica pura para calcular el nuevo nivel
+    def calc_next_level(current_prog):
+        if materia in current_prog:
+            lvl = current_prog[materia]['level']; xp = current_prog[materia]['xp']
+        else:
+            lvl = "Nivel 1 (Novato)"; xp = 0
+        
+        if passed:
+            xp += 10
+            idx = levels.index(lvl) if lvl in levels else 0
+            if idx < 4: 
+                return levels[idx+1], xp, f"¡Subiste de nivel en {materia}! Ahora eres: {levels[idx+1]} 🌟"
+        return lvl, xp, ""
+
+    # 1. Actualizar Offline
+    if 'offline_db' in st.session_state and username in st.session_state.offline_db['users']:
+        user = st.session_state.offline_db['users'][username]
+        nl, nx, m = calc_next_level(user.get('progreso', {}))
+        if 'progreso' not in user: user['progreso'] = {}
+        user['progreso'][materia] = {'level': nl, 'xp': nx}
+        return nl, m
+
+    # 2. Actualizar Online
     if not db: return None, None
     try:
         doc_ref = db.collection('usuarios').document(username)
         data = doc_ref.get().to_dict()
         progreso = data.get('progreso', {})
-        
-        if materia in progreso:
-            lvl = progreso[materia]['level']; xp = progreso[materia]['xp']
-        else:
-            lvl = "Nivel 1 (Novato)"; xp = 0
-            
-        levels = ["Nivel 1 (Novato)", "Nivel 2 (Estudiante)", "Nivel 3 (Interno)", "Nivel 4 (Residente)", "Nivel 5 (Especialista)"]
-        new_lvl = lvl; msg = ""
-        
-        if passed:
-            xp += 10
-            idx = levels.index(lvl) if lvl in levels else 0
-            if idx < 4: new_lvl = levels[idx+1]; msg = f"¡Subiste de nivel en {materia}! Ahora eres: {new_lvl} 🌟"
-        
-        progreso[materia] = {'level': new_lvl, 'xp': xp}
+        nl, nx, m = calc_next_level(progreso)
+        progreso[materia] = {'level': nl, 'xp': nx}
         doc_ref.update({'progreso': progreso})
-        return new_lvl, msg
+        return nl, m
     except: return None, None
 
 def get_user_decks(username):
+    # 1. Offline
+    if 'offline_db' in st.session_state:
+        if username in st.session_state.offline_db['decks']:
+            return st.session_state.offline_db['decks'][username]
+    
+    # 2. Online
     if not db: return {}
     try:
         decks = db.collection('usuarios').document(username).collection('mazos').stream()
@@ -267,7 +306,16 @@ def get_user_decks(username):
     except: return {}
 
 def save_user_deck(username, name, content, mat, sis):
-    if not db: return False
+    deck_data = {'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': str(time.time())}
+    
+    # 1. Guardar Offline
+    if not db:
+        if 'decks' not in st.session_state.offline_db: st.session_state.offline_db['decks'] = {}
+        if username not in st.session_state.offline_db['decks']: st.session_state.offline_db['decks'][username] = {}
+        st.session_state.offline_db['decks'][username][name] = deck_data
+        return True
+
+    # 2. Guardar Online
     try:
         db.collection('usuarios').document(username).collection('mazos').document(name).set({
             'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': firestore.SERVER_TIMESTAMP
@@ -276,7 +324,14 @@ def save_user_deck(username, name, content, mat, sis):
     except: return False
 
 def delete_user_deck(username, name):
-    if not db: return False
+    # 1. Borrar Offline
+    if not db:
+        if username in st.session_state.offline_db['decks'] and name in st.session_state.offline_db['decks'][username]:
+            del st.session_state.offline_db['decks'][username][name]
+            return True
+        return False
+
+    # 2. Borrar Online
     try:
         db.collection('usuarios').document(username).collection('mazos').document(name).delete()
         return True
@@ -297,6 +352,11 @@ authenticator = stauth.Authenticate(
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
     st.title("Med-Flash AI 🧬")
+    
+    # Mensaje de Estado DB
+    if not db:
+        st.warning("⚠️ Modo Offline Activado: Base de datos no conectada. Los datos se guardarán en esta sesión temporalmente.")
+    
     tab1, tab2 = st.tabs(["Login", "Registro"])
     with tab1: authenticator.login('main')
     with tab2:
@@ -304,7 +364,10 @@ if st.session_state["authentication_status"] is None:
             u = st.text_input("Usuario"); p = st.text_input("Pass", type="password"); n = st.text_input("Nombre"); e = st.text_input("Email")
             if st.form_submit_button("Registrar"):
                 res = register_new_user(n, e, u, p)
-                if res == "success": st.success("¡Registrado! Inicia sesión."); st.rerun()
+                if res == "success": 
+                    st.success("¡Registrado! Ahora ve a la pestaña Login e inicia sesión.")
+                    # Recargamos credenciales para que el Login vea el nuevo usuario inmediatamente
+                    st.rerun()
                 else: st.error(res)
 
 elif st.session_state["authentication_status"]:
@@ -330,6 +393,9 @@ elif st.session_state["authentication_status"]:
     with st.sidebar:
         st.title("Med-Flash AI")
         st.markdown(f"**Dr. {name}**")
+        if not db:
+            st.caption("⚠️ MODO OFFLINE")
+            
         if materia_display != "Seleccionar Materia":
             st.caption(f"Nivel en {materia_display}:")
             st.info(f"{nivel_actual}")
