@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión Completa con Verificación)
+# CÓDIGO FINAL DE MED-FLASH AI (Niveles por Materia)
 import streamlit as st
 import time
 import json
@@ -18,7 +18,6 @@ try:
     from firebase_admin import credentials, firestore
     import streamlit_authenticator as stauth
     import bcrypt
-    # Importación específica para compatibilidad con versión 0.3.3
     from streamlit_authenticator.utilities.hasher import Hasher 
 except ImportError as e:
     st.error("Error crítico de dependencias.")
@@ -161,9 +160,9 @@ if api_key_disponible:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         gemini_model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-09-2025")
     except Exception as e:
-        pass # Se maneja luego si gemini_model es None
+        pass
 
-# --- Funciones Usuario ---
+# --- Funciones Usuario (MODIFICADAS PARA NIVELES POR MATERIA) ---
 def get_all_users_credentials():
     safe_return = {'usernames': {}}
     if not db: return safe_return
@@ -183,33 +182,65 @@ def register_new_user(name, email, username, password):
         doc_ref = db.collection('usuarios').document(username)
         if doc_ref.get().exists: return "exists"
         hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-        doc_ref.set({'name': name, 'email': email, 'password': hashed_pw, 'level': "Nivel 1 (Novato)", 'xp': 0})
+        # Inicializamos 'progreso' como un mapa vacío
+        doc_ref.set({
+            'name': name, 
+            'email': email, 
+            'password': hashed_pw, 
+            'progreso': {} # Diccionario para niveles por materia
+        })
         return "success"
     except Exception as e: return str(e)
 
-def get_user_progress(username):
+def get_user_progress(username, materia):
+    """Obtiene el nivel específico de la materia solicitada."""
     if not db: return "Nivel 1 (Novato)", 0
     try:
         doc = db.collection('usuarios').document(username).get()
-        if doc.exists: return doc.get('level'), doc.get('xp')
+        if doc.exists: 
+            data = doc.to_dict()
+            progreso = data.get('progreso', {})
+            
+            # Si existe progreso específico para esa materia, lo devolvemos
+            if materia in progreso:
+                return progreso[materia]['level'], progreso[materia]['xp']
+            
+            # Fallback para usuarios antiguos o materias nuevas
+            return "Nivel 1 (Novato)", 0
     except: pass
     return "Nivel 1 (Novato)", 0
 
-def update_user_level(username, passed):
+def update_user_level(username, materia, passed):
+    """Actualiza el nivel SOLO de la materia estudiada."""
     if not db: return None, None
     try:
         doc_ref = db.collection('usuarios').document(username)
         data = doc_ref.get().to_dict()
-        lvl = data.get('level', "Nivel 1 (Novato)")
-        xp = data.get('xp', 0)
+        progreso = data.get('progreso', {})
+        
+        # Obtener estado actual de la materia
+        if materia in progreso:
+            lvl = progreso[materia]['level']
+            xp = progreso[materia]['xp']
+        else:
+            lvl = "Nivel 1 (Novato)"
+            xp = 0
+            
         levels = ["Nivel 1 (Novato)", "Nivel 2 (Estudiante)", "Nivel 3 (Interno)", "Nivel 4 (Residente)", "Nivel 5 (Especialista)"]
         new_lvl = lvl
         msg = ""
+        
         if passed:
             xp += 10
             idx = levels.index(lvl) if lvl in levels else 0
-            if idx < 4: new_lvl = levels[idx+1]; msg = f"¡Nivel UP! Ahora eres: {new_lvl} 🌟"
-        doc_ref.update({'level': new_lvl, 'xp': xp})
+            if idx < 4: 
+                new_lvl = levels[idx+1]
+                msg = f"¡Subiste de nivel en {materia}! Ahora eres: {new_lvl} 🌟"
+        
+        # Guardamos de vuelta en el mapa de progreso
+        progreso[materia] = {'level': new_lvl, 'xp': xp}
+        doc_ref.update({'progreso': progreso})
+        
         return new_lvl, msg
     except: return None, None
 
@@ -265,9 +296,18 @@ elif st.session_state["authentication_status"]:
     username = st.session_state.get("username")
     name = st.session_state.get("name")
     
+    # LÓGICA DE NIVEL POR MATERIA:
+    # Calculamos el nivel basado en la materia seleccionada actualmente
+    # Si es "Seleccionar Materia" o general, mostramos un placeholder o el nivel de "General"
+    materia_display = st.session_state.materia_actual
+    if materia_display == "Seleccionar Materia":
+        nivel_actual = "Selecciona Materia"
+    else:
+        l, x = get_user_progress(username, materia_display)
+        nivel_actual = l
+        st.session_state.user_level = nivel_actual # Actualizamos el estado global para que lo use la IA
+
     if st.session_state.get("last_login") != username:
-        l, x = get_user_progress(username)
-        st.session_state.user_level = l
         st.session_state.flashcard_library = get_user_decks(username)
         st.session_state.last_login = username
 
@@ -276,7 +316,14 @@ elif st.session_state["authentication_status"]:
     
     with st.sidebar:
         st.title("Med-Flash AI")
-        st.write(f"Dr. {name} | {st.session_state.user_level}")
+        # SIDEBAR DINÁMICO: Muestra el nivel específico de la materia actual
+        st.markdown(f"**Dr. {name}**")
+        if materia_display != "Seleccionar Materia":
+            st.caption(f"Nivel en {materia_display}:")
+            st.info(f"{nivel_actual}")
+        else:
+            st.caption("Selecciona una materia para ver tu nivel.")
+            
         authenticator.logout('Salir', 'sidebar')
         st.markdown("---")
         st.markdown(f"""
@@ -288,7 +335,6 @@ elif st.session_state["authentication_status"]:
         """, unsafe_allow_html=True)
         st.markdown("---")
         if st.button("1. Cargar Contenido", use_container_width=True): st.session_state.page = "Cargar Contenido"
-        # SECCIÓN RECUPERADA:
         if st.button("2. Verificación IA", use_container_width=True): st.session_state.page = "Verificación IA"
         if st.button("3. Generar Examen", use_container_width=True): st.session_state.page = "Generar Examen"
         if st.button("4. Estudiar", use_container_width=True): st.session_state.page = "Mi Progreso"
@@ -300,6 +346,9 @@ elif st.session_state["authentication_status"]:
         with c1:
             mat = st.selectbox("Materia:", MATERIAS)
             st.session_state.materia_actual = mat
+            # Forzar recarga para actualizar el nivel en el sidebar inmediatamente
+            if mat != materia_display:
+                 st.rerun()
         with c2:
             if mat in TOPICOS_POR_MATERIA: ops = TOPICOS_POR_MATERIA[mat]
             elif mat == "Seleccionar Materia": ops = ["Selecciona Materia Primero"]
@@ -318,7 +367,7 @@ elif st.session_state["authentication_status"]:
                     st.session_state.extracted_content = t
                     st.success("Texto extraído. Continúa a 'Verificación IA'.")
 
-    # --- PÁGINA 2: VERIFICACIÓN IA (RECUPERADA) ---
+    # --- PÁGINA 2: VERIFICACIÓN IA ---
     elif st.session_state.page == "Verificación IA":
         st.header("2. Verificación Médica con IA 🔬")
         if not st.session_state.extracted_content: st.warning("Carga un archivo primero."); st.stop()
@@ -334,7 +383,7 @@ elif st.session_state["authentication_status"]:
             prompt = [
                 f"Rol: Profesor de medicina experto en {st.session_state.materia_actual}.",
                 f"Contexto: {st.session_state.materia_actual} - {st.session_state.sistema_actual}.",
-                f"Texto a revisar:\n{st.session_state.extracted_content[:15000]}", # Límite seguro
+                f"Texto a revisar:\n{st.session_state.extracted_content[:15000]}",
                 "Tarea: Evalúa la precisión científica y claridad.",
                 "Usa formato Markdown:",
                 "- 🟢 Puntos Clave Correctos.",
@@ -360,19 +409,19 @@ elif st.session_state["authentication_status"]:
         num = st.slider("Preguntas", 1, 10, 5)
         
         if st.button("🚀 Crear con Feedback Visual", type="primary"):
-            # Protección contra error NoneType
             if not gemini_model:
-                st.error("❌ Error Crítico: No se detectó la API Key. Configura 'GOOGLE_API_KEY' en .streamlit/secrets.toml")
+                st.error("❌ Error Crítico: No se detectó la API Key.")
                 st.stop()
 
             if not d_name: st.error("Pon un nombre al mazo."); st.stop()
             restart_exam()
             
+            # Usamos el nivel ESPECÍFICO de la materia en el prompt
             prompt = [
                 f"Eres profesor experto en {st.session_state.materia_actual} y diseñador instruccional médico.",
-                f"Tema: {st.session_state.sistema_actual}. Nivel: {st.session_state.user_level}.",
+                f"Tema: {st.session_state.sistema_actual}. Nivel Estudiante: {st.session_state.user_level} (En {st.session_state.materia_actual}).",
                 f"Texto base:\n{st.session_state.extracted_content[:10000]}...",
-                f"Crea {num} preguntas de opción múltiple.",
+                f"Crea {num} preguntas de opción múltiple ADAPTADAS A ESTE NIVEL.",
                 "IMPORTANTE - FEEDBACK VISUAL:",
                 "En el campo 'explicacion', NO uses texto plano.",
                 "Usa MARKDOWN para crear:",
@@ -417,7 +466,9 @@ elif st.session_state["authentication_status"]:
     # --- PÁGINA 5: ESTUDIO ---
     elif st.session_state.page == "Estudiar":
         exam = st.session_state.current_exam.get('preguntas', [])
+        materia_examen = st.session_state.current_exam.get('materia', 'General') # Recuperar materia del mazo
         idx = st.session_state.current_question_index
+        
         if st.button("⬅ Volver"): st.session_state.page = "Mi Progreso"; restart_exam(); st.rerun()
         if idx < len(exam):
             q = exam[idx]
@@ -445,9 +496,14 @@ elif st.session_state["authentication_status"]:
             score = sum(1 for r in st.session_state.exam_results if r['ok'])
             final = (score / len(exam)) * 100
             st.metric("Resultado Final", f"{final:.0f}%")
-            nl, msg = update_user_level(username, final >= 80)
+            
+            # Actualizamos el nivel de LA MATERIA ESPECÍFICA DEL EXAMEN
+            nl, msg = update_user_level(username, materia_examen, final >= 80)
             if msg: st.success(msg)
-            st.session_state.user_level = nl if nl else st.session_state.user_level
+            
+            # Refrescamos la UI para que se vea el nuevo nivel si estamos en esa materia
+            if materia_examen == st.session_state.materia_actual:
+                st.session_state.user_level = nl if nl else st.session_state.user_level
 
 elif st.session_state["authentication_status"] is False:
     st.error("Credenciales inválidas")
