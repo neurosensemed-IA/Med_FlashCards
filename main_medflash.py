@@ -495,7 +495,7 @@ passwords_plain = ['123', '456']
 
 # 2. Generar hashes seguros (esto se ejecutará solo una vez en el servidor y se cacheará)
 # Nota: La sintaxis Hasher(passwords).generate() es la correcta para la versión instalada.
-hashed_passwords = stauth.utilities.Hasher(passwords_plain).generate()
+hashed_passwords = Hasher(passwords_plain).generate()
 
 # 3. Crear el diccionario de configuración
 credentials_data = get_all_users_credentials()
