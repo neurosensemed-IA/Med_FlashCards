@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión Optimizada Dr. David)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión Corregida Dr. David)
 import streamlit as st
 import time
 import json
@@ -43,8 +43,7 @@ STOIC_QUOTES = [
     "“El éxito es la suma de pequeños esfuerzos repetidos día tras día.” — Robert Collier"
 ]
 
-# --- VÍNCULOS VISUALES DINÁMICOS (EXPANDIDO) ---
-# Define iconos y colores para sistemas y temas moleculares
+# --- VÍNCULOS VISUALES DINÁMICOS ---
 SYSTEM_VISUALS = {
     # Sistemas Corporales
     "Cardiovascular": {"icon": "❤️", "color": "#FF5757"},
@@ -81,21 +80,18 @@ MATERIAS = [
     "Pediatría", "Neurología", "Cardiología", "Medicina Interna" # Especialidades
 ]
 
-# Listas base
 SISTEMAS_CUERPO = [
     "Cardiovascular", "Respiratorio", "Nervioso Central", "Nervioso Periférico", 
     "Digestivo", "Renal (Urinario)", "Musculoesquelético", "Endocrino", 
     "Hematológico", "Inmunológico", "Reproductivo", "General"
 ]
 
-# Diccionario de mapeo: Qué temas mostrar según la materia
 TOPICOS_POR_MATERIA = {
     "Bioquímica": ["Metabolismo", "Enzimas/Proteínas", "Genética/ADN", "General"],
     "Genética": ["Genética/ADN", "Biología Celular", "General"],
     "Biología Celular": ["Biología Celular", "Genética/ADN", "Metabolismo"],
     "Farmacología": ["Farmacocinética", "Farmacodinámica", "Antibióticos"] + SISTEMAS_CUERPO,
     "Microbiología": ["Antibióticos", "Inmunológico", "General"],
-    # Para las demás (Anatomía, Fisiología, etc.) usamos los sistemas del cuerpo por defecto
     "DEFAULT": SISTEMAS_CUERPO
 }
 
@@ -103,57 +99,30 @@ TOPICOS_POR_MATERIA = {
 st.markdown("""
 <style>
     :root {
-        --primary-color: #F5A6C1; 
-        --accent-gold: #FFD700; 
-        --delete-color: #DC143C; 
-        --text-color: #4A4A4A; 
-        --dark-bg: #1A1A1A; 
-        --dark-text: #F0F0F0; 
+        --primary-color: #F5A6C1; --accent-gold: #FFD700; --delete-color: #DC143C; 
+        --text-color: #4A4A4A; --dark-bg: #1A1A1A; --dark-text: #F0F0F0; 
     }
     body { background-color: var(--dark-bg); color: var(--dark-text); }
     .stApp { background-color: var(--dark-bg); }
-    
-    /* Tarjetas */
     .flashcard {
-        background-color: #2F2F2F; 
-        border-radius: 16px;
-        padding: 24px;
-        margin: 20px 0;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.6);
-        border: 2px solid var(--accent-gold);
-        color: var(--dark-text); 
+        background-color: #2F2F2F; border-radius: 16px; padding: 24px; margin: 20px 0;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.6); border: 2px solid var(--accent-gold); color: var(--dark-text); 
     }
-    
-    /* Feedback Visual Rico */
-    .feedback-correct {
-        background-color: #384238; border: 2px solid #5cb85c; border-radius: 12px; padding: 16px; margin-top: 10px; color: #E6F7E6;
-    }
-    .feedback-incorrect {
-        background-color: #423838; border: 2px solid #d9534f; border-radius: 12px; padding: 16px; margin-top: 10px; color: #F7E6E6;
-    }
+    .feedback-correct { background-color: #384238; border: 2px solid #5cb85c; border-radius: 12px; padding: 16px; margin-top: 10px; color: #E6F7E6; }
+    .feedback-incorrect { background-color: #423838; border: 2px solid #d9534f; border-radius: 12px; padding: 16px; margin-top: 10px; color: #F7E6E6; }
     .feedback-explanation {
-        background-color: #2D333B; /* Tono gris azulado técnico */
-        border-left: 4px solid #5bc0de; 
-        border-radius: 8px;
-        padding: 20px;
-        margin-top: 15px;
-        color: #E6F7F7;
-        font-family: 'Segoe UI', sans-serif;
+        background-color: #2D333B; border-left: 4px solid #5bc0de; border-radius: 8px; padding: 20px; margin-top: 15px; color: #E6F7F7; font-family: 'Segoe UI', sans-serif;
     }
-    
-    /* Doodle Container */
     .doodle-container {
-        width: 100%; height: 150px; background-color: #2F2F2F; 
-        border-radius: 16px; display: flex; flex-direction: column; 
-        align-items: center; justify-content: center; margin-bottom: 20px; padding: 10px;
-        border: 4px solid var(--system-color, var(--accent-gold));
+        width: 100%; height: 150px; background-color: #2F2F2F; border-radius: 16px; display: flex; flex-direction: column; 
+        align-items: center; justify-content: center; margin-bottom: 20px; padding: 10px; border: 4px solid var(--system-color, var(--accent-gold));
     }
     .doodle-container .system-icon { font-size: 4rem; line-height: 1; text-shadow: 0 0 5px rgba(255, 215, 0, 0.8); }
     .doodle-container .system-text { color: var(--dark-text); font-weight: bold; font-size: 0.85rem; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Funciones de Extracción ---
+# --- Funciones Auxiliares ---
 def extraer_texto_pdf(file_stream):
     try:
         doc = fitz.open(stream=file_stream.read(), filetype="pdf")
@@ -173,7 +142,7 @@ def extraer_texto_pptx(file_stream):
         return texto
     except Exception as e: return f"Error PPTX: {e}"
 
-# --- Lógica de Estado ---
+# --- Estado de Sesión ---
 if 'page' not in st.session_state: st.session_state.page = "Cargar Contenido"
 if 'extracted_content' not in st.session_state: st.session_state.extracted_content = None
 if 'current_exam' not in st.session_state: st.session_state.current_exam = None
@@ -211,18 +180,18 @@ def init_firebase():
 
 db = init_firebase()
 
-def check_api_key():
-    return "GOOGLE_API_KEY" in st.secrets and st.secrets["GOOGLE_API_KEY"]
-
-api_key_disponible = check_api_key()
+api_key_disponible = "GOOGLE_API_KEY" in st.secrets and st.secrets["GOOGLE_API_KEY"]
 gemini_model = None
 if api_key_disponible:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     gemini_model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-09-2025")
 
-# --- Funciones Usuario (Simplificadas) ---
+# --- Funciones Usuario (CORREGIDO KEYERROR) ---
 def get_all_users_credentials():
-    if not db: return {} # Retorno vacío si no hay DB
+    # Estructura mínima segura para evitar KeyError en stauth
+    safe_return = {'usernames': {}}
+    
+    if not db: return safe_return
     try:
         users_ref = db.collection('usuarios')
         docs = users_ref.stream()
@@ -230,8 +199,10 @@ def get_all_users_credentials():
         for doc in docs:
             data = doc.to_dict()
             usernames_dict[doc.id] = data
+        
+        if not usernames_dict: return safe_return
         return {'usernames': usernames_dict}
-    except: return {}
+    except: return safe_return
 
 def register_new_user(name, email, username, password):
     if not db: return "Error DB"
@@ -296,7 +267,7 @@ def delete_user_deck(username, name):
 
 # --- AUTHENTICATOR SETUP ---
 credentials_data = get_all_users_credentials()
-# IMPORTANTE: Configuración compatible con versión 0.3.3
+
 config = {
     'credentials': credentials_data,
     'cookie': {'expiry_days': 30, 'key': 'medflash_key', 'name': 'medflash_cookie'},
@@ -306,7 +277,6 @@ authenticator = stauth.Authenticate(
     config['credentials'], config['cookie']['name'], config['cookie']['key'], 
     config['cookie']['expiry_days'], config['preauthorized']['emails']
 )
-
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
@@ -325,14 +295,12 @@ elif st.session_state["authentication_status"]:
     username = st.session_state.get("username")
     name = st.session_state.get("name")
     
-    # Sync inicial
     if st.session_state.get("last_login") != username:
         l, x = get_user_progress(username)
         st.session_state.user_level = l
         st.session_state.flashcard_library = get_user_decks(username)
         st.session_state.last_login = username
 
-    # Iconos Dinámicos Seguros
     current_system = st.session_state.sistema_actual
     visuals = SYSTEM_VISUALS.get(current_system, SYSTEM_VISUALS["Otro"])
     
@@ -353,8 +321,6 @@ elif st.session_state["authentication_status"]:
         if st.button("2. Generar Examen", use_container_width=True): st.session_state.page = "Generar Examen"
         if st.button("3. Estudiar", use_container_width=True): st.session_state.page = "Mi Progreso"
 
-    # --- PÁGINAS ---
-    
     if st.session_state.page == "Cargar Contenido":
         st.header("1. Contexto Clínico 📚")
         c1, c2 = st.columns(2)
@@ -362,11 +328,9 @@ elif st.session_state["authentication_status"]:
             mat = st.selectbox("Materia:", MATERIAS)
             st.session_state.materia_actual = mat
         with c2:
-            # LOGICA DE CASCADA: Filtrar temas según materia
             if mat in TOPICOS_POR_MATERIA: ops = TOPICOS_POR_MATERIA[mat]
             elif mat == "Seleccionar Materia": ops = ["Selecciona Materia Primero"]
             else: ops = TOPICOS_POR_MATERIA["DEFAULT"]
-            
             sis = st.selectbox("Tema/Sistema:", ops)
             st.session_state.sistema_actual = sis
             
@@ -392,11 +356,10 @@ elif st.session_state["authentication_status"]:
             if not d_name: st.error("Pon un nombre al mazo."); st.stop()
             restart_exam()
             
-            # PROMPT AVANZADO PARA RESPUESTAS VISUALES
             prompt = [
                 f"Eres profesor experto en {st.session_state.materia_actual} y diseñador instruccional médico.",
                 f"Tema: {st.session_state.sistema_actual}. Nivel: {st.session_state.user_level}.",
-                f"Texto base:\n{st.session_state.extracted_content[:10000]}...", # Limitamos caracteres por si acaso
+                f"Texto base:\n{st.session_state.extracted_content[:10000]}...",
                 f"Crea {num} preguntas de opción múltiple.",
                 "IMPORTANTE - FEEDBACK VISUAL:",
                 "En el campo 'explicacion', NO uses texto plano.",
@@ -423,13 +386,10 @@ elif st.session_state["authentication_status"]:
     elif st.session_state.page == "Mi Progreso":
         st.header("3. Biblioteca de Estudio 🏆")
         decks = st.session_state.get("flashcard_library", {})
-        
         if not decks: st.info("No tienes mazos."); st.stop()
-        
         opts = [f"{k} [{v.get('materia','?')}]" for k,v in decks.items()]
         sel = st.selectbox("Selecciona Mazo", opts)
         real_name = sel.split(" [")[0]
-        
         c1, c2 = st.columns([1, 4])
         if c1.button("Estudiar"):
             st.session_state.current_exam = decks[real_name]
@@ -444,17 +404,13 @@ elif st.session_state["authentication_status"]:
     elif st.session_state.page == "Estudiar":
         exam = st.session_state.current_exam.get('preguntas', [])
         idx = st.session_state.current_question_index
-        
         if st.button("⬅ Volver"): st.session_state.page = "Mi Progreso"; restart_exam(); st.rerun()
-        
         if idx < len(exam):
             q = exam[idx]
             st.markdown(f"### Pregunta {idx+1}/{len(exam)}")
             st.markdown(f'<div class="flashcard"><h5>{q["pregunta"]}</h5></div>', unsafe_allow_html=True)
-            
             ops = list(q['opciones'].values())
             sel = st.radio("Tu respuesta:", ops, key=f"q{idx}", disabled=st.session_state.show_explanation)
-            
             if st.button("Responder") and sel:
                 st.session_state.show_explanation = True
                 cor_ltr = q['respuesta_correcta']
@@ -468,12 +424,8 @@ elif st.session_state["authentication_status"]:
                 res = st.session_state.exam_results[idx]
                 if res['ok']: st.markdown('<div class="feedback-correct">✅ Correcto</div>', unsafe_allow_html=True)
                 else: st.markdown(f'<div class="feedback-incorrect">❌ Error. Era: {res["cor"]}</div>', unsafe_allow_html=True)
-                
-                # AQUÍ SE MUESTRA EL CONTENIDO RICO GENERADO POR IA
                 st.markdown(f'<div class="feedback-explanation">{q["explicacion"]}</div>', unsafe_allow_html=True)
-                
                 if st.button("Siguiente ➡"): go_to_next_question(); st.rerun()
-        
         else:
             st.balloons()
             score = sum(1 for r in st.session_state.exam_results if r['ok'])
