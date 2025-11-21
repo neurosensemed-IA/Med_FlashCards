@@ -4,8 +4,6 @@ import streamlit as st
 import time
 import json
 import random 
-import yaml
-from yaml.loader import SafeLoader
 
 try:
     # --- Importaciones Críticas ---
