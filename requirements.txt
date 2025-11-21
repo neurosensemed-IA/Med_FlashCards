@@ -6,6 +6,6 @@ pandas
 google-generativeai
 plotly
 firebase-admin
-streamlit-authenticator
+streamlit-authenticator==0.3.3
 bcrypt
 PyYAML
