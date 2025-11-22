@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI v2.2 (Corrección Estructural de Memoria)
+# CÓDIGO FINAL DE MED-FLASH AI v2.3 (Fondo Rosa-Dorado)
 import streamlit as st
 import time
 import json
@@ -26,7 +26,7 @@ except ImportError as e:
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Med-Flash AI v2.2",
+    page_title="Med-Flash AI v2.3",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="collapsed", 
@@ -86,51 +86,54 @@ TOPICOS_POR_MATERIA = {
     "DEFAULT": SISTEMAS_CUERPO
 }
 
-# --- ESTILOS CSS (CORRECCIONES DE CONTRASTE Y BRILLO) ---
+# --- ESTILOS CSS (FONDO ORO ROSA + HIPERREALISMO) ---
 st.markdown("""
 <style>
-    /* 1. FONDO / UI: Acuarela Artística */
+    /* 1. FONDO / UI: Acuarela Artística con Tinte Dorado */
     .stApp {
-        background-color: #fdfbf7; /* Base papel crema muy suave */
+        background-color: #fdfbf7; /* Base papel crema */
         background-image: 
-            radial-gradient(at 0% 0%, hsla(340,82%,76%,0.3) 0px, transparent 50%),
-            radial-gradient(at 100% 0%, hsla(210,29%,24%,0.1) 0px, transparent 50%),
-            radial-gradient(at 100% 100%, hsla(340,82%,76%,0.2) 0px, transparent 50%),
-            radial-gradient(at 0% 100%, hsla(210,29%,24%,0.1) 0px, transparent 50%);
+            /* Rosa Pastel (Arriba Izquierda) */
+            radial-gradient(at 10% 10%, hsla(340,82%,76%,0.35) 0px, transparent 50%),
+            /* ORO CÁLIDO (Arriba Derecha - El tinte dorado) */
+            radial-gradient(at 90% 10%, hsla(45, 90%, 70%, 0.3) 0px, transparent 50%),
+            /* Gris Azulado (Abajo Izquierda) */
+            radial-gradient(at 0% 100%, hsla(210,29%,24%,0.1) 0px, transparent 50%),
+            /* Mezcla Rosa/Oro (Abajo Derecha) */
+            radial-gradient(at 90% 90%, hsla(350, 80%, 80%, 0.2) 0px, transparent 50%);
         background-attachment: fixed;
     }
 
-    /* FIX BARRA LATERAL: Forzar fondo claro y texto oscuro legible */
+    /* FIX BARRA LATERAL */
     [data-testid="stSidebar"] {
-        background-color: #f7f9fc; /* Gris azulado muy pálido */
-        border-right: 1px solid rgba(0,0,0,0.05);
+        background-color: #fdfbf7; /* Coincidir con el papel base */
+        border-right: 1px solid rgba(214, 158, 46, 0.2); /* Sutil línea dorada */
     }
     [data-testid="stSidebar"] * {
-        color: #4A5568 !important; /* Gris pizarra para contraste perfecto */
+        color: #4A5568 !important; 
     }
     [data-testid="stSidebar"] .stButton button {
         border: 1px solid #cbd5e0;
         color: #4A5568 !important;
     }
     [data-testid="stSidebar"] .stButton button:hover {
-        border-color: #F5A6C1;
+        border-color: #D69E2E; /* Dorado al hover */
         background-color: white;
     }
 
-    /* TEXTO GENERAL: "Bajar el brillo" (De negro puro a Gris Frío) */
+    /* TEXTO GENERAL */
     h1, h2, h3, p, label, .stMarkdown, .stRadio label {
-        color: #4A5568 !important; /* Mucho más suave para la vista */
+        color: #4A5568 !important; 
         font-family: 'Helvetica Neue', sans-serif;
     }
     
-    /* Títulos principales un poco más oscuros para jerarquía */
     h1, h2 {
         color: #2D3748 !important;
     }
 
     /* 2. TARJETA DE PREGUNTA: Marco Dorado Iridiscente */
     .flashcard {
-        background: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.95); /* Más opaco para legibilidad */
         backdrop-filter: blur(12px);
         border-radius: 20px;
         padding: 40px;
@@ -139,17 +142,17 @@ st.markdown("""
         /* El Borde Dorado Holográfico */
         border: 3px solid transparent;
         background-image: linear-gradient(white, white), 
-                          linear-gradient(135deg, #C5A059, #F2E6C2, #C5A059); /* Oro más mate/elegante */
+                          linear-gradient(135deg, #C5A059, #F2E6C2, #D4AF37, #F2E6C2, #C5A059); 
         background-origin: border-box;
         background-clip: content-box, border-box;
-        box-shadow: 0 8px 20px rgba(197, 160, 89, 0.2); 
+        box-shadow: 0 15px 35px rgba(197, 160, 89, 0.25); 
         
         color: #2D3748;
         font-size: 1.2rem;
         font-weight: 500;
     }
 
-    /* 3. CONTENIDO CENTRAL (FEEDBACK): Hiperrealismo 8K */
+    /* 3. FEEDBACK: Hiperrealismo 8K */
     .feedback-container {
         margin-top: 25px;
         border-radius: 12px;
@@ -160,7 +163,7 @@ st.markdown("""
 
     .feedback-correct {
         background: linear-gradient(145deg, #142615, #0a110a);
-        color: #86efac; /* Verde suave, menos neón */
+        color: #86efac; 
         padding: 20px;
         font-weight: bold;
         border-bottom: 1px solid rgba(134, 239, 172, 0.1);
@@ -168,15 +171,15 @@ st.markdown("""
 
     .feedback-incorrect {
         background: linear-gradient(145deg, #2b1111, #140808);
-        color: #fca5a5; /* Rojo suave, menos neón */
+        color: #fca5a5; 
         padding: 20px;
         font-weight: bold;
         border-bottom: 1px solid rgba(252, 165, 165, 0.1);
     }
 
     .feedback-explanation {
-        background: #1a202c; /* Gris muy oscuro (Gunmetal) en vez de negro total */
-        color: #edf2f7; /* Blanco hueso para texto */
+        background: #1a202c; 
+        color: #edf2f7; 
         padding: 30px;
         font-family: 'Segoe UI', sans-serif;
         line-height: 1.7;
@@ -209,24 +212,24 @@ st.markdown("""
         align-items: center; justify-content: center; 
         margin-bottom: 20px; padding: 10px; 
         border: 2px solid var(--system-color, #d69e2e);
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        box-shadow: 0 4px 12px rgba(214, 158, 46, 0.15);
     }
     .doodle-container .system-icon { font-size: 4rem; line-height: 1; }
     .doodle-container .system-text { color: #4A5568 !important; font-weight: bold; font-size: 0.85rem; }
     
-    /* Botones Principales */
+    /* Botones Principales (Oro Rosa) */
     .stButton > button {
         border-radius: 25px;
-        background-image: linear-gradient(to right, #Eeb4c9 0%, #e6a6be 100%); /* Rosa más mate */
+        background-image: linear-gradient(to right, #E6A6BE 0%, #D4AF37 100%); /* Rosa a Oro */
         color: white !important;
         border: none;
         font-weight: 600;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 10px rgba(212, 175, 55, 0.3);
         transition: all 0.2s;
     }
     .stButton > button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 6px 10px rgba(0,0,0,0.15);
+        box-shadow: 0 6px 15px rgba(212, 175, 55, 0.4);
     }
     
 </style>
@@ -494,7 +497,7 @@ authenticator = stauth.Authenticate(
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
-    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.2 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.3 🧬</h1>", unsafe_allow_html=True)
     
     if not db:
         st.warning("⚠️ Modo Offline Activado: Datos temporales.")
