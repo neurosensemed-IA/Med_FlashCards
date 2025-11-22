@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión UI: Acuarela Soft + Hiperrealismo 8K)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión UI: Acuarela Soft + Hiperrealismo 8K + Fix Atributos)
 import streamlit as st
 import time
 import json
@@ -660,6 +660,10 @@ elif st.session_state["authentication_status"]:
                     data = json.loads(txt[txt.find('['):txt.rfind(']')+1])
                     
                     if save_user_deck(username, d_name, data, st.session_state.materia_actual, st.session_state.sistema_actual):
+                        # --- FIX: ASEGURAR QUE SEA DICCIONARIO ---
+                        if not isinstance(st.session_state.get('flashcard_library'), dict):
+                             st.session_state.flashcard_library = {}
+                        # -----------------------------------------
                         st.session_state.flashcard_library[d_name] = data
                         st.success("Mazo creado. Vamos a estudiar."); st.balloons()
                 except Exception as e: st.error(f"Error IA: {e}")
@@ -667,8 +671,17 @@ elif st.session_state["authentication_status"]:
     # --- PÁGINA 4: PROGRESO ---
     elif st.session_state.page == "Mi Progreso":
         st.header("4. Biblioteca de Estudio 🏆")
+        
+        # --- FIX CRÍTICO: AUTOCORRECCIÓN DE MEMORIA ---
         decks = st.session_state.get("flashcard_library", {})
+        if not isinstance(decks, dict):
+            # Si decks es un string o error, lo forzamos a recargar de la fuente real
+            decks = get_user_decks(username)
+            st.session_state.flashcard_library = decks
+        # ----------------------------------------------
+
         if not decks: st.info("No tienes mazos."); st.stop()
+        
         opts = [f"{k} [{v.get('materia','?')}]" for k,v in decks.items()]
         sel = st.selectbox("Selecciona Mazo", opts)
         real_name = sel.split(" [")[0]
