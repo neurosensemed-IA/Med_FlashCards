@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI v2.1 (Auto-Reparación de Datos)
+# CÓDIGO FINAL DE MED-FLASH AI v2.2 (Corrección Estructural de Memoria)
 import streamlit as st
 import time
 import json
@@ -26,7 +26,7 @@ except ImportError as e:
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Med-Flash AI v2.1",
+    page_title="Med-Flash AI v2.2",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="collapsed", 
@@ -494,7 +494,7 @@ authenticator = stauth.Authenticate(
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
-    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.1 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.2 🧬</h1>", unsafe_allow_html=True)
     
     if not db:
         st.warning("⚠️ Modo Offline Activado: Datos temporales.")
@@ -664,10 +664,23 @@ elif st.session_state["authentication_status"]:
                     txt = res.text.replace('```json', '').replace('```', '')
                     data = json.loads(txt[txt.find('['):txt.rfind(']')+1])
                     
+                    # 1. CONSTRUIMOS LA ESTRUCTURA COMPLETA DEL MAZO
+                    deck_full_structure = {
+                        'preguntas': data,
+                        'materia': st.session_state.materia_actual,
+                        'sistema': st.session_state.sistema_actual,
+                        'creado': str(time.time())
+                    }
+
+                    # 2. GUARDAMOS EN DB/OFFLINE
                     if save_user_deck(username, d_name, data, st.session_state.materia_actual, st.session_state.sistema_actual):
+                        # 3. ACTUALIZAMOS MEMORIA (SESSION STATE) CON LA ESTRUCTURA CORRECTA
                         if not isinstance(st.session_state.get('flashcard_library'), dict):
                              st.session_state.flashcard_library = {}
-                        st.session_state.flashcard_library[d_name] = data
+                        
+                        # FIX CRÍTICO: Guardamos el diccionario completo, no solo la lista 'data'
+                        st.session_state.flashcard_library[d_name] = deck_full_structure
+                        
                         st.success("Mazo creado. Vamos a estudiar."); st.balloons()
                 except Exception as e: st.error(f"Error IA: {e}")
 
@@ -690,7 +703,7 @@ elif st.session_state["authentication_status"]:
             corrupted_count = 0
             
             for k, v in raw_decks.items():
-                if isinstance(v, dict): # Solo aceptamos diccionarios válidos
+                if isinstance(v, dict) and 'preguntas' in v: # Validación estricta
                     label = f"{k} [{v.get('materia','General')}]"
                     valid_opts.append(label)
                     deck_map[label] = k
@@ -698,7 +711,7 @@ elif st.session_state["authentication_status"]:
                     corrupted_count += 1
             
             if corrupted_count > 0:
-                st.warning(f"Se detectaron y omitieron {corrupted_count} archivos corruptos antiguos.")
+                st.caption(f"Nota: Se ocultaron {corrupted_count} archivos antiguos incompatibles.")
 
             if not valid_opts:
                 st.info("Tu biblioteca está vacía (los archivos anteriores no eran válidos). Crea un nuevo mazo.")
