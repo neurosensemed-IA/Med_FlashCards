@@ -150,13 +150,33 @@ def go_to_next_question():
 # --- API & Database ---
 @st.cache_resource
 def init_firebase():
+    # 1. Verificación de existencia
+    if "FIREBASE_SERVICE_ACCOUNT" not in st.secrets:
+        # Si no está el secreto, seguimos en modo offline silenciosamente
+        return None
+        
     try:
-        if "FIREBASE_SERVICE_ACCOUNT" not in st.secrets: return None
-        cred_json = json.loads(st.secrets["FIREBASE_SERVICE_ACCOUNT"])
+        # 2. Intento de lectura y limpieza
+        # A veces los secrets agregan espacios invisibles, hacemos strip()
+        secret_value = st.secrets["FIREBASE_SERVICE_ACCOUNT"].strip()
+        
+        # 3. Validación de JSON
+        try:
+            cred_json = json.loads(secret_value)
+        except json.JSONDecodeError as e:
+            st.error(f"⚠️ Error de formato en 'Secrets': El JSON no es válido. Revisa comillas o llaves. Detalles: {e}")
+            return None
+            
+        # 4. Conexión
         cred = credentials.Certificate(cred_json)
-        if not firebase_admin._apps: firebase_admin.initialize_app(cred)
+        if not firebase_admin._apps: 
+            firebase_admin.initialize_app(cred)
+        
         return firestore.client()
-    except Exception as e: return None
+        
+    except Exception as e:
+        st.error(f"⚠️ Error conectando a Firebase: {e}")
+        return None
 
 db = init_firebase()
 
