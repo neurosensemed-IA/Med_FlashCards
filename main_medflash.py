@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión UI: Acuarela + Hiperrealismo 8K)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión UI: Acuarela Soft + Hiperrealismo 8K)
 import streamlit as st
 import time
 import json
@@ -86,29 +86,51 @@ TOPICOS_POR_MATERIA = {
     "DEFAULT": SISTEMAS_CUERPO
 }
 
-# --- ESTILOS CSS (DISEÑO ACUARELA + HIPERREALISMO) ---
+# --- ESTILOS CSS (CORRECCIONES DE CONTRASTE Y BRILLO) ---
 st.markdown("""
 <style>
     /* 1. FONDO / UI: Acuarela Artística */
     .stApp {
-        background-color: #fdfbf7; /* Base papel */
+        background-color: #fdfbf7; /* Base papel crema muy suave */
         background-image: 
-            radial-gradient(at 0% 0%, hsla(340,82%,76%,0.4) 0px, transparent 50%),
-            radial-gradient(at 100% 0%, hsla(210,29%,24%,0.2) 0px, transparent 50%),
-            radial-gradient(at 100% 100%, hsla(340,82%,76%,0.3) 0px, transparent 50%),
-            radial-gradient(at 0% 100%, hsla(210,29%,24%,0.2) 0px, transparent 50%);
+            radial-gradient(at 0% 0%, hsla(340,82%,76%,0.3) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, hsla(210,29%,24%,0.1) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, hsla(340,82%,76%,0.2) 0px, transparent 50%),
+            radial-gradient(at 0% 100%, hsla(210,29%,24%,0.1) 0px, transparent 50%);
         background-attachment: fixed;
     }
 
-    /* Texto general oscuro para contraste con acuarela clara */
-    h1, h2, h3, p, label, .stMarkdown {
-        color: #2D3436 !important;
+    /* FIX BARRA LATERAL: Forzar fondo claro y texto oscuro legible */
+    [data-testid="stSidebar"] {
+        background-color: #f7f9fc; /* Gris azulado muy pálido */
+        border-right: 1px solid rgba(0,0,0,0.05);
+    }
+    [data-testid="stSidebar"] * {
+        color: #4A5568 !important; /* Gris pizarra para contraste perfecto */
+    }
+    [data-testid="stSidebar"] .stButton button {
+        border: 1px solid #cbd5e0;
+        color: #4A5568 !important;
+    }
+    [data-testid="stSidebar"] .stButton button:hover {
+        border-color: #F5A6C1;
+        background-color: white;
+    }
+
+    /* TEXTO GENERAL: "Bajar el brillo" (De negro puro a Gris Frío) */
+    h1, h2, h3, p, label, .stMarkdown, .stRadio label {
+        color: #4A5568 !important; /* Mucho más suave para la vista */
         font-family: 'Helvetica Neue', sans-serif;
+    }
+    
+    /* Títulos principales un poco más oscuros para jerarquía */
+    h1, h2 {
+        color: #2D3748 !important;
     }
 
     /* 2. TARJETA DE PREGUNTA: Marco Dorado Iridiscente */
     .flashcard {
-        background: rgba(255, 255, 255, 0.85);
+        background: rgba(255, 255, 255, 0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
         padding: 40px;
@@ -117,102 +139,94 @@ st.markdown("""
         /* El Borde Dorado Holográfico */
         border: 3px solid transparent;
         background-image: linear-gradient(white, white), 
-                          linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C);
+                          linear-gradient(135deg, #C5A059, #F2E6C2, #C5A059); /* Oro más mate/elegante */
         background-origin: border-box;
         background-clip: content-box, border-box;
-        box-shadow: 0 10px 30px rgba(179, 135, 40, 0.3); /* Sombra dorada */
+        box-shadow: 0 8px 20px rgba(197, 160, 89, 0.2); 
         
-        color: #2D3436;
+        color: #2D3748;
         font-size: 1.2rem;
         font-weight: 500;
     }
 
     /* 3. CONTENIDO CENTRAL (FEEDBACK): Hiperrealismo 8K */
-    /* Contenedor "Objeto de Estudio" */
     .feedback-container {
         margin-top: 25px;
         border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9); /* Sombra profunda de estudio */
+        box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8);
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .feedback-correct {
-        background: linear-gradient(145deg, #1a2e1a, #0f1a0f);
-        color: #4ade80; /* Verde neón nítido */
+        background: linear-gradient(145deg, #142615, #0a110a);
+        color: #86efac; /* Verde suave, menos neón */
         padding: 20px;
         font-weight: bold;
-        border-bottom: 1px solid rgba(74, 222, 128, 0.2);
-        text-shadow: 0 0 10px rgba(74, 222, 128, 0.5); /* Glow */
+        border-bottom: 1px solid rgba(134, 239, 172, 0.1);
     }
 
     .feedback-incorrect {
-        background: linear-gradient(145deg, #2e1a1a, #1a0f0f);
-        color: #ff6b6b; /* Rojo neón nítido */
+        background: linear-gradient(145deg, #2b1111, #140808);
+        color: #fca5a5; /* Rojo suave, menos neón */
         padding: 20px;
         font-weight: bold;
-        border-bottom: 1px solid rgba(255, 107, 107, 0.2);
-        text-shadow: 0 0 10px rgba(255, 107, 107, 0.5); /* Glow */
+        border-bottom: 1px solid rgba(252, 165, 165, 0.1);
     }
 
     .feedback-explanation {
-        /* Estilo "Microscopio Metálico" */
-        background: #121212; /* Negro técnico */
-        color: #E0E0E0;
+        background: #1a202c; /* Gris muy oscuro (Gunmetal) en vez de negro total */
+        color: #edf2f7; /* Blanco hueso para texto */
         padding: 30px;
         font-family: 'Segoe UI', sans-serif;
-        line-height: 1.6;
-        
-        /* Efecto de luz cenital */
-        background-image: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.1) 0%, transparent 70%);
+        line-height: 1.7;
     }
     
-    /* Ajuste de tablas dentro del feedback para que parezcan pantallas */
     .feedback-explanation table {
         width: 100%;
         border-collapse: collapse;
         margin: 15px 0;
-        background: #1E1E1E;
+        background: #2d3748;
         border-radius: 8px;
         overflow: hidden;
     }
     .feedback-explanation th {
-        background: #2D2D2D;
-        color: #FFD700; /* Cabeceras doradas */
+        background: #4a5568;
+        color: #F6E05E; 
         padding: 10px;
     }
     .feedback-explanation td {
         padding: 10px;
-        border-bottom: 1px solid #333;
+        border-bottom: 1px solid #4a5568;
     }
 
-    /* Doodle Container (Barra lateral) */
+    /* Doodle Container */
     .doodle-container {
         width: 100%; height: 150px; 
-        background-color: rgba(255,255,255,0.9); 
+        background-color: white; 
         border-radius: 16px; 
         display: flex; flex-direction: column; 
         align-items: center; justify-content: center; 
         margin-bottom: 20px; padding: 10px; 
-        border: 2px solid var(--system-color, #FFD700);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border: 2px solid var(--system-color, #d69e2e);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
     }
     .doodle-container .system-icon { font-size: 4rem; line-height: 1; }
-    .doodle-container .system-text { color: #2D3436; font-weight: bold; font-size: 0.85rem; }
+    .doodle-container .system-text { color: #4A5568 !important; font-weight: bold; font-size: 0.85rem; }
     
-    /* Botones */
+    /* Botones Principales */
     .stButton > button {
         border-radius: 25px;
-        background-image: linear-gradient(45deg, #F5A6C1 0%, #ff9a9e 100%);
+        background-image: linear-gradient(to right, #Eeb4c9 0%, #e6a6be 100%); /* Rosa más mate */
         color: white !important;
         border: none;
-        font-weight: bold;
-        box-shadow: 0 4px 15px rgba(245, 166, 193, 0.4);
-        transition: transform 0.2s;
+        font-weight: 600;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: all 0.2s;
     }
     .stButton > button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 6px 20px rgba(245, 166, 193, 0.6);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 10px rgba(0,0,0,0.15);
     }
     
 </style>
@@ -475,7 +489,7 @@ authenticator = stauth.Authenticate(
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
-    st.markdown("<h1 style='text-align: center; color: #2D3436;'>Med-Flash AI 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI 🧬</h1>", unsafe_allow_html=True)
     
     if not db:
         st.warning("⚠️ Modo Offline Activado: Datos temporales.")
