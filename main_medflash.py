@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI v2.4 (UI Limpia + Privacidad)
+# CÓDIGO FINAL DE MED-FLASH AI v2.5 (Enfoque MIR/USMLE)
 import streamlit as st
 import time
 import json
@@ -26,7 +26,7 @@ except ImportError as e:
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Med-Flash AI v2.4",
+    page_title="Med-Flash AI v2.5",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="collapsed", 
@@ -324,7 +324,6 @@ def register_new_user(name, email, username, password):
     if db:
         try:
             doc_ref = db.collection('usuarios').document(username)
-            # Verificación silenciosa de existencia en la nube
             if doc_ref.get().exists: return "El usuario ya existe."
             doc_ref.set(user_data)
         except Exception as e: return f"Guardado localmente, pero error en nube: {str(e)}"
@@ -432,7 +431,7 @@ authenticator = stauth.Authenticate(
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
-    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.4 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.5 🧬</h1>", unsafe_allow_html=True)
     
     if not db:
         st.warning("⚠️ Modo Offline Activado: Datos temporales.")
@@ -440,7 +439,6 @@ if st.session_state["authentication_status"] is None:
     tab1, tab2 = st.tabs(["Login", "Registro"])
     with tab1: 
         authenticator.login('main')
-        # LISTA DE USUARIOS ELIMINADA PARA PRIVACIDAD
 
     with tab2:
         with st.form("reg"):
@@ -578,23 +576,31 @@ elif st.session_state["authentication_status"]:
             if not d_name: st.error("Pon un nombre al mazo."); st.stop()
             restart_exam()
             
+            # PROMPT MIR/USMLE ESPECIALIZADO
             prompt = [
-                f"Eres profesor experto en {st.session_state.materia_actual} y diseñador instruccional médico.",
-                f"Tema: {st.session_state.sistema_actual}. Nivel Estudiante: {st.session_state.user_level} (En {st.session_state.materia_actual}).",
-                f"Texto base:\n{st.session_state.extracted_content[:10000]}...",
-                f"Crea {num} preguntas de opción múltiple ADAPTADAS A ESTE NIVEL.",
-                "IMPORTANTE - FEEDBACK VISUAL:",
-                "En el campo 'explicacion', NO uses texto plano.",
-                "Usa MARKDOWN para crear:",
-                "- Tablas comparativas.",
-                "- Listas con emojis (🦠, 💊, ⚡).",
-                "- Diagramas de flujo de texto (A -> B -> C).",
-                "- Esquemas anatómicos simples ( [Órgano] === [Tejido] ).",
+                f"Eres un experto redactor de preguntas para exámenes MIR y USMLE especializado en {st.session_state.materia_actual}.",
+                f"Tema: {st.session_state.sistema_actual}. Nivel Estudiante: {st.session_state.user_level}.",
+                f"Texto base para extraer conceptos:\n{st.session_state.extracted_content[:10000]}...",
+                f"Genera {num} preguntas de opción múltiple.",
+                
+                "ESTILO DE PREGUNTAS (PRIORIDAD MIR/USMLE):",
+                "1. VINETAS CLÍNICAS (80%): Presenta un caso corto (Paciente de X años, síntomas Y...).",
+                "   - Pregunta por el DIAGNÓSTICO, MECANISMO o MANEJO.",
+                "2. RAZONAMIENTO FISIOLÓGICO (Importante):",
+                "   - Incluye preguntas de vectores/cambios: '¿Cómo cambian la Presión Arterial y la RVS?'",
+                "   - Opciones tipo: 'Aumenta / Disminuye', 'No cambia / Aumenta'.",
+                "3. CONCEPTUALES (20%): Definiciones directas si el nivel es Novato.",
+                
+                "IMPORTANTE - FEEDBACK VISUAL Y EDUCATIVO:",
+                "En el campo 'explicacion', la respuesta debe ser una revisión de alto rendimiento:",
+                "- Usa MARKDOWN para Tablas, Listas y Esquemas.",
+                "- Explica por qué la correcta es correcta Y por qué las otras son incorrectas.",
+                
                 "Formato JSON array estricto:",
                 """[{"pregunta": "...", "opciones": {"A": "...", "B": "...", "C": "...", "D": "..."}, "respuesta_correcta": "A", "explicacion": "Markdown rico aquí..."}]"""
             ]
             
-            with st.spinner("Generando explicaciones gráficas..."):
+            with st.spinner("Diseñando caso clínico y preguntas..."):
                 try:
                     res = gemini_model.generate_content(prompt)
                     txt = res.text.replace('```json', '').replace('```', '')
@@ -667,7 +673,9 @@ elif st.session_state["authentication_status"]:
         if idx < len(exam):
             q = exam[idx]
             st.markdown(f"### Pregunta {idx+1}/{len(exam)}")
+            
             st.markdown(f'<div class="flashcard"><h5>{q["pregunta"]}</h5></div>', unsafe_allow_html=True)
+            
             ops = list(q['opciones'].values())
             sel = st.radio("Tu respuesta:", ops, key=f"q{idx}", disabled=st.session_state.show_explanation)
             if st.button("Responder") and sel:
