@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI v2.3 (Fondo Rosa-Dorado)
+# CÓDIGO FINAL DE MED-FLASH AI v2.4 (UI Limpia + Privacidad)
 import streamlit as st
 import time
 import json
@@ -26,7 +26,7 @@ except ImportError as e:
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Med-Flash AI v2.3",
+    page_title="Med-Flash AI v2.4",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="collapsed", 
@@ -86,38 +86,49 @@ TOPICOS_POR_MATERIA = {
     "DEFAULT": SISTEMAS_CUERPO
 }
 
-# --- ESTILOS CSS (FONDO ORO ROSA + HIPERREALISMO) ---
+# --- ESTILOS CSS (UI Limpia + Inputs Blancos) ---
 st.markdown("""
 <style>
-    /* 1. FONDO / UI: Acuarela Artística con Tinte Dorado */
+    /* 1. FONDO / UI: Acuarela Artística */
     .stApp {
         background-color: #fdfbf7; /* Base papel crema */
         background-image: 
-            /* Rosa Pastel (Arriba Izquierda) */
             radial-gradient(at 10% 10%, hsla(340,82%,76%,0.35) 0px, transparent 50%),
-            /* ORO CÁLIDO (Arriba Derecha - El tinte dorado) */
             radial-gradient(at 90% 10%, hsla(45, 90%, 70%, 0.3) 0px, transparent 50%),
-            /* Gris Azulado (Abajo Izquierda) */
             radial-gradient(at 0% 100%, hsla(210,29%,24%,0.1) 0px, transparent 50%),
-            /* Mezcla Rosa/Oro (Abajo Derecha) */
             radial-gradient(at 90% 90%, hsla(350, 80%, 80%, 0.2) 0px, transparent 50%);
         background-attachment: fixed;
     }
 
+    /* INPUTS LIMPIOS (Login/Registro) */
+    [data-testid="stTextInput"] input {
+        background-color: #ffffff !important;
+        color: #2d3748 !important;
+        border: 1px solid #cbd5e0 !important;
+        border-radius: 12px;
+        padding: 10px;
+    }
+    [data-testid="stTextInput"] input:focus {
+        border-color: #F5A6C1 !important;
+        box-shadow: 0 0 0 2px rgba(245, 166, 193, 0.3) !important;
+    }
+    [data-testid="stTextInput"] label {
+        color: #4A5568 !important;
+        font-weight: 600;
+    }
+
     /* FIX BARRA LATERAL */
     [data-testid="stSidebar"] {
-        background-color: #fdfbf7; /* Coincidir con el papel base */
-        border-right: 1px solid rgba(214, 158, 46, 0.2); /* Sutil línea dorada */
+        background-color: #fdfbf7;
+        border-right: 1px solid rgba(214, 158, 46, 0.2);
     }
-    [data-testid="stSidebar"] * {
-        color: #4A5568 !important; 
-    }
+    [data-testid="stSidebar"] * { color: #4A5568 !important; }
     [data-testid="stSidebar"] .stButton button {
         border: 1px solid #cbd5e0;
         color: #4A5568 !important;
     }
     [data-testid="stSidebar"] .stButton button:hover {
-        border-color: #D69E2E; /* Dorado al hover */
+        border-color: #D69E2E;
         background-color: white;
     }
 
@@ -126,33 +137,27 @@ st.markdown("""
         color: #4A5568 !important; 
         font-family: 'Helvetica Neue', sans-serif;
     }
-    
-    h1, h2 {
-        color: #2D3748 !important;
-    }
+    h1, h2 { color: #2D3748 !important; }
 
-    /* 2. TARJETA DE PREGUNTA: Marco Dorado Iridiscente */
+    /* TARJETA DE PREGUNTA */
     .flashcard {
-        background: rgba(255, 255, 255, 0.95); /* Más opaco para legibilidad */
+        background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(12px);
         border-radius: 20px;
         padding: 40px;
         margin: 30px 0;
-        
-        /* El Borde Dorado Holográfico */
         border: 3px solid transparent;
         background-image: linear-gradient(white, white), 
                           linear-gradient(135deg, #C5A059, #F2E6C2, #D4AF37, #F2E6C2, #C5A059); 
         background-origin: border-box;
         background-clip: content-box, border-box;
         box-shadow: 0 15px 35px rgba(197, 160, 89, 0.25); 
-        
         color: #2D3748;
         font-size: 1.2rem;
         font-weight: 500;
     }
 
-    /* 3. FEEDBACK: Hiperrealismo 8K */
+    /* FEEDBACK */
     .feedback-container {
         margin-top: 25px;
         border-radius: 12px;
@@ -160,77 +165,42 @@ st.markdown("""
         box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8);
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
-
     .feedback-correct {
         background: linear-gradient(145deg, #142615, #0a110a);
-        color: #86efac; 
-        padding: 20px;
-        font-weight: bold;
-        border-bottom: 1px solid rgba(134, 239, 172, 0.1);
+        color: #86efac; padding: 20px; font-weight: bold; border-bottom: 1px solid rgba(134, 239, 172, 0.1);
     }
-
     .feedback-incorrect {
         background: linear-gradient(145deg, #2b1111, #140808);
-        color: #fca5a5; 
-        padding: 20px;
-        font-weight: bold;
-        border-bottom: 1px solid rgba(252, 165, 165, 0.1);
+        color: #fca5a5; padding: 20px; font-weight: bold; border-bottom: 1px solid rgba(252, 165, 165, 0.1);
     }
-
     .feedback-explanation {
-        background: #1a202c; 
-        color: #edf2f7; 
-        padding: 30px;
-        font-family: 'Segoe UI', sans-serif;
-        line-height: 1.7;
+        background: #1a202c; color: #edf2f7; padding: 30px; font-family: 'Segoe UI', sans-serif; line-height: 1.7;
     }
-    
-    .feedback-explanation table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 15px 0;
-        background: #2d3748;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .feedback-explanation th {
-        background: #4a5568;
-        color: #F6E05E; 
-        padding: 10px;
-    }
-    .feedback-explanation td {
-        padding: 10px;
-        border-bottom: 1px solid #4a5568;
-    }
+    .feedback-explanation table { width: 100%; border-collapse: collapse; margin: 15px 0; background: #2d3748; border-radius: 8px; overflow: hidden; }
+    .feedback-explanation th { background: #4a5568; color: #F6E05E; padding: 10px; }
+    .feedback-explanation td { padding: 10px; border-bottom: 1px solid #4a5568; }
 
     /* Doodle Container */
     .doodle-container {
-        width: 100%; height: 150px; 
-        background-color: white; 
-        border-radius: 16px; 
-        display: flex; flex-direction: column; 
-        align-items: center; justify-content: center; 
-        margin-bottom: 20px; padding: 10px; 
-        border: 2px solid var(--system-color, #d69e2e);
+        width: 100%; height: 150px; background-color: white; border-radius: 16px; 
+        display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        margin-bottom: 20px; padding: 10px; border: 2px solid var(--system-color, #d69e2e);
         box-shadow: 0 4px 12px rgba(214, 158, 46, 0.15);
     }
     .doodle-container .system-icon { font-size: 4rem; line-height: 1; }
     .doodle-container .system-text { color: #4A5568 !important; font-weight: bold; font-size: 0.85rem; }
     
-    /* Botones Principales (Oro Rosa) */
+    /* Botones */
     .stButton > button {
         border-radius: 25px;
-        background-image: linear-gradient(to right, #E6A6BE 0%, #D4AF37 100%); /* Rosa a Oro */
+        background-image: linear-gradient(to right, #E6A6BE 0%, #D4AF37 100%);
         color: white !important;
         border: none;
         font-weight: 600;
         box-shadow: 0 4px 10px rgba(212, 175, 55, 0.3);
         transition: all 0.2s;
     }
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 15px rgba(212, 175, 55, 0.4);
-    }
+    .stButton > button:hover { transform: translateY(-1px); box-shadow: 0 6px 15px rgba(212, 175, 55, 0.4); }
     
 </style>
 """, unsafe_allow_html=True)
@@ -283,9 +253,7 @@ def go_to_next_question():
 # --- API & Database ---
 @st.cache_resource
 def init_firebase():
-    # 1. Verificación de existencia
-    if "FIREBASE_SERVICE_ACCOUNT" not in st.secrets:
-        return None
+    if "FIREBASE_SERVICE_ACCOUNT" not in st.secrets: return None
     try:
         secret_value = st.secrets["FIREBASE_SERVICE_ACCOUNT"].strip()
         try:
@@ -294,8 +262,7 @@ def init_firebase():
             st.error(f"⚠️ Error de formato en 'Secrets': {e}")
             return None
         cred = credentials.Certificate(cred_json)
-        if not firebase_admin._apps: 
-            firebase_admin.initialize_app(cred)
+        if not firebase_admin._apps: firebase_admin.initialize_app(cred)
         return firestore.client()
     except Exception as e:
         st.error(f"⚠️ Error conectando a Firebase: {e}")
@@ -309,16 +276,12 @@ if api_key_disponible:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         gemini_model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-09-2025")
-    except Exception as e:
-        pass
+    except Exception as e: pass
 
 # --- CAPA DE DATOS HÍBRIDA ---
 def get_all_users_credentials():
-    """Carga usuarios de DB, memoria offline y puente de memoria."""
-    try:
-        test_hash = Hasher(['123']).generate()[0] 
-    except Exception:
-        test_hash = "$2b$12$y.X.1.1.1.1.1.1.1.1.1.u.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1"
+    try: test_hash = Hasher(['123']).generate()[0] 
+    except: test_hash = "$2b$12$y.X.1.1.1.1.1.1.1.1.1.u.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1"
 
     base_credentials = {
         'usernames': {
@@ -332,19 +295,15 @@ def get_all_users_credentials():
         }
     }
 
-    # 1. Cargar desde Firebase (Si existe)
     if db:
         try:
             users_ref = db.collection('usuarios')
             docs = users_ref.stream()
             for doc in docs:
                 data = doc.to_dict()
-                if 'password' in data:
-                    base_credentials['usernames'][doc.id] = data
-        except Exception as e:
-            print(f"Error DB: {e}")
+                if 'password' in data: base_credentials['usernames'][doc.id] = data
+        except Exception as e: print(f"Error DB: {e}")
 
-    # 2. Sobrescribir/Añadir con memoria local (Latency Fix)
     if 'offline_db' in st.session_state:
         for u, data in st.session_state.offline_db['users'].items():
             base_credentials['usernames'][u] = data
@@ -352,40 +311,31 @@ def get_all_users_credentials():
     return base_credentials
 
 def register_new_user(name, email, username, password):
-    """Registra en DB y en memoria local SIMULTÁNEAMENTE."""
-    if not name or not email or not username or not password:
-        return "Por favor completa todos los campos."
+    if not name or not email or not username or not password: return "Por favor completa todos los campos."
 
     hashed_pw = Hasher([password]).generate()[0]
-    user_data = {
-        'name': name, 
-        'email': email, 
-        'password': hashed_pw, 
-        'progreso': {} 
-    }
+    user_data = {'name': name, 'email': email, 'password': hashed_pw, 'progreso': {}}
 
-    # Guardar SIEMPRE en memoria local primero (Latency Fix)
-    if 'offline_db' not in st.session_state:
-        st.session_state.offline_db = {'users': {}, 'decks': {}}
+    # Offline
+    if 'offline_db' not in st.session_state: st.session_state.offline_db = {'users': {}, 'decks': {}}
     st.session_state.offline_db['users'][username] = user_data
 
-    # Intento Online (Si hay DB)
+    # Online
     if db:
         try:
             doc_ref = db.collection('usuarios').document(username)
+            # Verificación silenciosa de existencia en la nube
+            if doc_ref.get().exists: return "El usuario ya existe."
             doc_ref.set(user_data)
-        except Exception as e:
-            return f"Guardado localmente, pero error en nube: {str(e)}"
+        except Exception as e: return f"Guardado localmente, pero error en nube: {str(e)}"
 
     return "success"
 
 def get_user_progress(username, materia):
-    # 1. Buscar Offline
     if 'offline_db' in st.session_state and username in st.session_state.offline_db['users']:
         progreso = st.session_state.offline_db['users'][username].get('progreso', {})
         if materia in progreso: return progreso[materia]['level'], progreso[materia]['xp']
 
-    # 2. Buscar Online
     if not db: return "Nivel 1 (Novato)", 0
     try:
         doc = db.collection('usuarios').document(username).get()
@@ -400,28 +350,22 @@ def update_user_level(username, materia, passed):
     levels = ["Nivel 1 (Novato)", "Nivel 2 (Estudiante)", "Nivel 3 (Interno)", "Nivel 4 (Residente)", "Nivel 5 (Especialista)"]
     
     def calc_next_level(current_prog):
-        if materia in current_prog:
-            lvl = current_prog[materia]['level']; xp = current_prog[materia]['xp']
-        else:
-            lvl = "Nivel 1 (Novato)"; xp = 0
+        if materia in current_prog: lvl = current_prog[materia]['level']; xp = current_prog[materia]['xp']
+        else: lvl = "Nivel 1 (Novato)"; xp = 0
         
         if passed:
             xp += 10
             idx = levels.index(lvl) if lvl in levels else 0
-            if idx < 4: 
-                return levels[idx+1], xp, f"¡Subiste de nivel en {materia}! Ahora eres: {levels[idx+1]} 🌟"
+            if idx < 4: return levels[idx+1], xp, f"¡Subiste de nivel en {materia}! Ahora eres: {levels[idx+1]} 🌟"
         return lvl, xp, ""
 
-    # 1. Actualizar Offline
     if 'offline_db' in st.session_state and username in st.session_state.offline_db['users']:
         user = st.session_state.offline_db['users'][username]
         nl, nx, m = calc_next_level(user.get('progreso', {}))
         if 'progreso' not in user: user['progreso'] = {}
         user['progreso'][materia] = {'level': nl, 'xp': nx}
 
-    # 2. Actualizar Online
-    if not db: 
-        return nl, m if 'nl' in locals() else ""
+    if not db: return nl, m if 'nl' in locals() else ""
         
     try:
         doc_ref = db.collection('usuarios').document(username)
@@ -435,25 +379,19 @@ def update_user_level(username, materia, passed):
 
 def get_user_decks(username):
     decks = {}
-    # 1. Offline
     if 'offline_db' in st.session_state and username in st.session_state.offline_db['decks']:
         decks.update(st.session_state.offline_db['decks'][username])
-    
-    # 2. Online
     if db:
         try:
             stream = db.collection('usuarios').document(username).collection('mazos').stream()
             for d in stream:
-                # FIX CRÍTICO DE SANITIZACIÓN
                 data = d.to_dict()
-                if isinstance(data, dict) and 'preguntas' in data:
-                    decks[d.id] = data
+                if isinstance(data, dict) and 'preguntas' in data: decks[d.id] = data
         except: pass
     return decks
 
 def save_user_deck(username, name, content, mat, sis):
     deck_data = {'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': str(time.time())}
-    
     if 'offline_db' not in st.session_state: st.session_state.offline_db = {'users':{}, 'decks':{}}
     if 'decks' not in st.session_state.offline_db: st.session_state.offline_db['decks'] = {}
     if username not in st.session_state.offline_db['decks']: st.session_state.offline_db['decks'][username] = {}
@@ -465,7 +403,6 @@ def save_user_deck(username, name, content, mat, sis):
                 'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': firestore.SERVER_TIMESTAMP
             })
         except: return False 
-    
     return True
 
 def delete_user_deck(username, name):
@@ -474,13 +411,11 @@ def delete_user_deck(username, name):
         if name in st.session_state.offline_db['decks'][username]:
             del st.session_state.offline_db['decks'][username][name]
             success = True
-
     if db:
         try:
             db.collection('usuarios').document(username).collection('mazos').document(name).delete()
             success = True
         except: pass
-    
     return success
 
 # --- AUTHENTICATOR SETUP ---
@@ -497,7 +432,7 @@ authenticator = stauth.Authenticate(
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
-    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.3 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.4 🧬</h1>", unsafe_allow_html=True)
     
     if not db:
         st.warning("⚠️ Modo Offline Activado: Datos temporales.")
@@ -505,9 +440,7 @@ if st.session_state["authentication_status"] is None:
     tab1, tab2 = st.tabs(["Login", "Registro"])
     with tab1: 
         authenticator.login('main')
-        with st.expander("Verificar Usuarios Disponibles"):
-            st.caption("Usuarios cargados en memoria (Login permitido):")
-            st.code(list(credentials_data['usernames'].keys()))
+        # LISTA DE USUARIOS ELIMINADA PARA PRIVACIDAD
 
     with tab2:
         with st.form("reg"):
@@ -667,7 +600,6 @@ elif st.session_state["authentication_status"]:
                     txt = res.text.replace('```json', '').replace('```', '')
                     data = json.loads(txt[txt.find('['):txt.rfind(']')+1])
                     
-                    # 1. CONSTRUIMOS LA ESTRUCTURA COMPLETA DEL MAZO
                     deck_full_structure = {
                         'preguntas': data,
                         'materia': st.session_state.materia_actual,
@@ -675,15 +607,10 @@ elif st.session_state["authentication_status"]:
                         'creado': str(time.time())
                     }
 
-                    # 2. GUARDAMOS EN DB/OFFLINE
                     if save_user_deck(username, d_name, data, st.session_state.materia_actual, st.session_state.sistema_actual):
-                        # 3. ACTUALIZAMOS MEMORIA (SESSION STATE) CON LA ESTRUCTURA CORRECTA
                         if not isinstance(st.session_state.get('flashcard_library'), dict):
                              st.session_state.flashcard_library = {}
-                        
-                        # FIX CRÍTICO: Guardamos el diccionario completo, no solo la lista 'data'
                         st.session_state.flashcard_library[d_name] = deck_full_structure
-                        
                         st.success("Mazo creado. Vamos a estudiar."); st.balloons()
                 except Exception as e: st.error(f"Error IA: {e}")
 
@@ -691,7 +618,6 @@ elif st.session_state["authentication_status"]:
     elif st.session_state.page == "Mi Progreso":
         st.header("4. Biblioteca de Estudio 🏆")
         
-        # 1. Recuperación Inteligente
         raw_decks = st.session_state.get("flashcard_library", {})
         if not isinstance(raw_decks, dict):
             raw_decks = get_user_decks(username)
@@ -700,21 +626,19 @@ elif st.session_state["authentication_status"]:
         if not raw_decks:
             st.info("No tienes mazos guardados aún.")
         else:
-            # 2. Filtrado de mazos corruptos
             valid_opts = []
             deck_map = {}
             corrupted_count = 0
             
             for k, v in raw_decks.items():
-                if isinstance(v, dict) and 'preguntas' in v: # Validación estricta
+                if isinstance(v, dict) and 'preguntas' in v: 
                     label = f"{k} [{v.get('materia','General')}]"
                     valid_opts.append(label)
                     deck_map[label] = k
                 else:
                     corrupted_count += 1
             
-            if corrupted_count > 0:
-                st.caption(f"Nota: Se ocultaron {corrupted_count} archivos antiguos incompatibles.")
+            if corrupted_count > 0: st.caption(f"Nota: Se ocultaron {corrupted_count} archivos antiguos incompatibles.")
 
             if not valid_opts:
                 st.info("Tu biblioteca está vacía (los archivos anteriores no eran válidos). Crea un nuevo mazo.")
@@ -743,10 +667,7 @@ elif st.session_state["authentication_status"]:
         if idx < len(exam):
             q = exam[idx]
             st.markdown(f"### Pregunta {idx+1}/{len(exam)}")
-            
-            # TARJETA DE PREGUNTA CON BORDE DORADO IRIDISCENTE
             st.markdown(f'<div class="flashcard"><h5>{q["pregunta"]}</h5></div>', unsafe_allow_html=True)
-            
             ops = list(q['opciones'].values())
             sel = st.radio("Tu respuesta:", ops, key=f"q{idx}", disabled=st.session_state.show_explanation)
             if st.button("Responder") and sel:
@@ -759,30 +680,21 @@ elif st.session_state["authentication_status"]:
                 st.rerun()
 
             if st.session_state.show_explanation:
-                # CONTENEDOR HIPERREALISTA (FEEDBACK)
                 st.markdown('<div class="feedback-container">', unsafe_allow_html=True)
-                
                 res = st.session_state.exam_results[idx]
-                if res['ok']: 
-                    st.markdown('<div class="feedback-correct">✅ ¡EXCELENTE! RESPUESTA CORRECTA</div>', unsafe_allow_html=True)
-                else: 
-                    st.markdown(f'<div class="feedback-incorrect">❌ INCORRECTO. RESPUESTA REAL: {res["cor"]}</div>', unsafe_allow_html=True)
-                
+                if res['ok']: st.markdown('<div class="feedback-correct">✅ ¡EXCELENTE! RESPUESTA CORRECTA</div>', unsafe_allow_html=True)
+                else: st.markdown(f'<div class="feedback-incorrect">❌ INCORRECTO. RESPUESTA REAL: {res["cor"]}</div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="feedback-explanation">{q["explicacion"]}</div>', unsafe_allow_html=True)
-                
-                st.markdown('</div>', unsafe_allow_html=True) # Fin container
-                
-                st.write("") # Espacio
+                st.markdown('</div>', unsafe_allow_html=True) 
+                st.write("") 
                 if st.button("Siguiente ➡"): go_to_next_question(); st.rerun()
         else:
             st.balloons()
             score = sum(1 for r in st.session_state.exam_results if r['ok'])
             final = (score / len(exam)) * 100
             st.metric("Resultado Final", f"{final:.0f}%")
-            
             nl, msg = update_user_level(username, materia_examen, final >= 80)
             if msg: st.success(msg)
-            
             if materia_examen == st.session_state.materia_actual:
                 st.session_state.user_level = nl if nl else st.session_state.user_level
 
