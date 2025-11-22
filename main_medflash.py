@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI v2.0 (Versión Blindada Anti-Errores)
+# CÓDIGO FINAL DE MED-FLASH AI v2.1 (Auto-Reparación de Datos)
 import streamlit as st
 import time
 import json
@@ -26,7 +26,7 @@ except ImportError as e:
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Med-Flash AI v2.0",
+    page_title="Med-Flash AI v2.1",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="collapsed", 
@@ -432,14 +432,19 @@ def update_user_level(username, materia, passed):
 
 def get_user_decks(username):
     decks = {}
+    # 1. Offline
     if 'offline_db' in st.session_state and username in st.session_state.offline_db['decks']:
         decks.update(st.session_state.offline_db['decks'][username])
     
+    # 2. Online
     if db:
         try:
             stream = db.collection('usuarios').document(username).collection('mazos').stream()
             for d in stream:
-                decks[d.id] = d.to_dict()
+                # FIX CRÍTICO DE SANITIZACIÓN
+                data = d.to_dict()
+                if isinstance(data, dict) and 'preguntas' in data:
+                    decks[d.id] = data
         except: pass
     return decks
 
@@ -489,7 +494,7 @@ authenticator = stauth.Authenticate(
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
-    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.0 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.1 🧬</h1>", unsafe_allow_html=True)
     
     if not db:
         st.warning("⚠️ Modo Offline Activado: Datos temporales.")
@@ -666,48 +671,44 @@ elif st.session_state["authentication_status"]:
                         st.success("Mazo creado. Vamos a estudiar."); st.balloons()
                 except Exception as e: st.error(f"Error IA: {e}")
 
-    # --- PÁGINA 4: PROGRESO (VERSIÓN BLINDADA) ---
+    # --- PÁGINA 4: PROGRESO (AUTO-REPARACIÓN) ---
     elif st.session_state.page == "Mi Progreso":
         st.header("4. Biblioteca de Estudio 🏆")
         
-        # 1. Recuperación y saneamiento
+        # 1. Recuperación Inteligente
         raw_decks = st.session_state.get("flashcard_library", {})
-        
-        # Si está corrupto (no es dict), recargar desde DB
         if not isinstance(raw_decks, dict):
             raw_decks = get_user_decks(username)
             st.session_state.flashcard_library = raw_decks
         
-        decks = raw_decks
-        
-        if not decks:
+        if not raw_decks:
             st.info("No tienes mazos guardados aún.")
         else:
-            # 2. Generación Segura de Opciones (Elemento por Elemento)
-            opts = []
+            # 2. Filtrado de mazos corruptos
+            valid_opts = []
             deck_map = {}
+            corrupted_count = 0
             
-            try:
-                for k, v in decks.items():
-                    # Verificamos que CADA mazo sea un diccionario válido
-                    if isinstance(v, dict):
-                        label = f"{k} [{v.get('materia','General')}]"
-                        opts.append(label)
-                        deck_map[label] = k
-                
-                if not opts:
-                    st.warning("Tus mazos parecen vacíos o corruptos.")
-                    if st.button("Limpiar Memoria"):
-                        st.session_state.flashcard_library = {}
-                        st.rerun()
-                    st.stop()
+            for k, v in raw_decks.items():
+                if isinstance(v, dict): # Solo aceptamos diccionarios válidos
+                    label = f"{k} [{v.get('materia','General')}]"
+                    valid_opts.append(label)
+                    deck_map[label] = k
+                else:
+                    corrupted_count += 1
+            
+            if corrupted_count > 0:
+                st.warning(f"Se detectaron y omitieron {corrupted_count} archivos corruptos antiguos.")
 
-                sel = st.selectbox("Selecciona Mazo", opts)
+            if not valid_opts:
+                st.info("Tu biblioteca está vacía (los archivos anteriores no eran válidos). Crea un nuevo mazo.")
+            else:
+                sel = st.selectbox("Selecciona Mazo", valid_opts)
                 real_name = deck_map[sel]
                 
                 c1, c2 = st.columns([1, 4])
                 if c1.button("Estudiar"):
-                    st.session_state.current_exam = decks[real_name]
+                    st.session_state.current_exam = raw_decks[real_name]
                     st.session_state.current_exam['name'] = real_name
                     st.session_state.page = "Estudiar"
                     st.rerun()
@@ -715,12 +716,6 @@ elif st.session_state["authentication_status"]:
                      delete_user_deck(username, real_name)
                      del st.session_state.flashcard_library[real_name]
                      st.rerun()
-                     
-            except Exception as e:
-                st.error(f"Error de lectura: {e}")
-                if st.button("Reparar Biblioteca"):
-                    st.session_state.flashcard_library = get_user_decks(username)
-                    st.rerun()
 
     # --- PÁGINA 5: ESTUDIO ---
     elif st.session_state.page == "Estudiar":
