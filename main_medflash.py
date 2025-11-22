@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión UI: Acuarela Soft + Hiperrealismo 8K + Fix Atributos)
+# CÓDIGO FINAL DE MED-FLASH AI v2.0 (Versión Blindada Anti-Errores)
 import streamlit as st
 import time
 import json
@@ -26,7 +26,7 @@ except ImportError as e:
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Med-Flash AI",
+    page_title="Med-Flash AI v2.0",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="collapsed", 
@@ -489,7 +489,7 @@ authenticator = stauth.Authenticate(
 
 # --- MAIN APP ---
 if st.session_state["authentication_status"] is None:
-    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #4A5568;'>Med-Flash AI v2.0 🧬</h1>", unsafe_allow_html=True)
     
     if not db:
         st.warning("⚠️ Modo Offline Activado: Datos temporales.")
@@ -660,41 +660,67 @@ elif st.session_state["authentication_status"]:
                     data = json.loads(txt[txt.find('['):txt.rfind(']')+1])
                     
                     if save_user_deck(username, d_name, data, st.session_state.materia_actual, st.session_state.sistema_actual):
-                        # --- FIX: ASEGURAR QUE SEA DICCIONARIO ---
                         if not isinstance(st.session_state.get('flashcard_library'), dict):
                              st.session_state.flashcard_library = {}
-                        # -----------------------------------------
                         st.session_state.flashcard_library[d_name] = data
                         st.success("Mazo creado. Vamos a estudiar."); st.balloons()
                 except Exception as e: st.error(f"Error IA: {e}")
 
-    # --- PÁGINA 4: PROGRESO ---
+    # --- PÁGINA 4: PROGRESO (VERSIÓN BLINDADA) ---
     elif st.session_state.page == "Mi Progreso":
         st.header("4. Biblioteca de Estudio 🏆")
         
-        # --- FIX CRÍTICO: AUTOCORRECCIÓN DE MEMORIA ---
-        decks = st.session_state.get("flashcard_library", {})
-        if not isinstance(decks, dict):
-            # Si decks es un string o error, lo forzamos a recargar de la fuente real
-            decks = get_user_decks(username)
-            st.session_state.flashcard_library = decks
-        # ----------------------------------------------
-
-        if not decks: st.info("No tienes mazos."); st.stop()
+        # 1. Recuperación y saneamiento
+        raw_decks = st.session_state.get("flashcard_library", {})
         
-        opts = [f"{k} [{v.get('materia','?')}]" for k,v in decks.items()]
-        sel = st.selectbox("Selecciona Mazo", opts)
-        real_name = sel.split(" [")[0]
-        c1, c2 = st.columns([1, 4])
-        if c1.button("Estudiar"):
-            st.session_state.current_exam = decks[real_name]
-            st.session_state.current_exam['name'] = real_name
-            st.session_state.page = "Estudiar"
-            st.rerun()
-        if c1.button("Borrar"):
-             delete_user_deck(username, real_name)
-             del st.session_state.flashcard_library[real_name]
-             st.rerun()
+        # Si está corrupto (no es dict), recargar desde DB
+        if not isinstance(raw_decks, dict):
+            raw_decks = get_user_decks(username)
+            st.session_state.flashcard_library = raw_decks
+        
+        decks = raw_decks
+        
+        if not decks:
+            st.info("No tienes mazos guardados aún.")
+        else:
+            # 2. Generación Segura de Opciones (Elemento por Elemento)
+            opts = []
+            deck_map = {}
+            
+            try:
+                for k, v in decks.items():
+                    # Verificamos que CADA mazo sea un diccionario válido
+                    if isinstance(v, dict):
+                        label = f"{k} [{v.get('materia','General')}]"
+                        opts.append(label)
+                        deck_map[label] = k
+                
+                if not opts:
+                    st.warning("Tus mazos parecen vacíos o corruptos.")
+                    if st.button("Limpiar Memoria"):
+                        st.session_state.flashcard_library = {}
+                        st.rerun()
+                    st.stop()
+
+                sel = st.selectbox("Selecciona Mazo", opts)
+                real_name = deck_map[sel]
+                
+                c1, c2 = st.columns([1, 4])
+                if c1.button("Estudiar"):
+                    st.session_state.current_exam = decks[real_name]
+                    st.session_state.current_exam['name'] = real_name
+                    st.session_state.page = "Estudiar"
+                    st.rerun()
+                if c1.button("Borrar"):
+                     delete_user_deck(username, real_name)
+                     del st.session_state.flashcard_library[real_name]
+                     st.rerun()
+                     
+            except Exception as e:
+                st.error(f"Error de lectura: {e}")
+                if st.button("Reparar Biblioteca"):
+                    st.session_state.flashcard_library = get_user_decks(username)
+                    st.rerun()
 
     # --- PÁGINA 5: ESTUDIO ---
     elif st.session_state.page == "Estudiar":
