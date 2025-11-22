@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión Híbrida: Online + Offline Fallback)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión Robusta con Diagnóstico)
 import streamlit as st
 import time
 import json
@@ -152,28 +152,18 @@ def go_to_next_question():
 def init_firebase():
     # 1. Verificación de existencia
     if "FIREBASE_SERVICE_ACCOUNT" not in st.secrets:
-        # Si no está el secreto, seguimos en modo offline silenciosamente
         return None
-        
     try:
-        # 2. Intento de lectura y limpieza
-        # A veces los secrets agregan espacios invisibles, hacemos strip()
         secret_value = st.secrets["FIREBASE_SERVICE_ACCOUNT"].strip()
-        
-        # 3. Validación de JSON
         try:
             cred_json = json.loads(secret_value)
         except json.JSONDecodeError as e:
-            st.error(f"⚠️ Error de formato en 'Secrets': El JSON no es válido. Revisa comillas o llaves. Detalles: {e}")
+            st.error(f"⚠️ Error de formato en 'Secrets': {e}")
             return None
-            
-        # 4. Conexión
         cred = credentials.Certificate(cred_json)
         if not firebase_admin._apps: 
             firebase_admin.initialize_app(cred)
-        
         return firestore.client()
-        
     except Exception as e:
         st.error(f"⚠️ Error conectando a Firebase: {e}")
         return None
@@ -189,8 +179,7 @@ if api_key_disponible:
     except Exception as e:
         pass
 
-# --- CAPA DE DATOS HÍBRIDA (ONLINE + OFFLINE FALLBACK) ---
-
+# --- CAPA DE DATOS HÍBRIDA ---
 def get_all_users_credentials():
     """Carga usuarios de DB o de memoria offline."""
     try:
@@ -231,6 +220,10 @@ def get_all_users_credentials():
 
 def register_new_user(name, email, username, password):
     """Registra en DB o en memoria offline si DB falla."""
+    # Validación simple
+    if not name or not email or not username or not password:
+        return "Por favor completa todos los campos."
+
     hashed_pw = Hasher([password]).generate()[0]
     user_data = {
         'name': name, 
@@ -239,14 +232,14 @@ def register_new_user(name, email, username, password):
         'progreso': {} 
     }
 
-    # Intento Offline (Si no hay DB)
+    # Intento Offline
     if not db:
         if username in st.session_state.offline_db['users']:
             return "El usuario ya existe (Offline)."
         st.session_state.offline_db['users'][username] = user_data
         return "success"
 
-    # Intento Online (Firebase)
+    # Intento Online
     try:
         doc_ref = db.collection('usuarios').document(username)
         if doc_ref.get().exists: return "El usuario ya existe."
@@ -275,10 +268,7 @@ def get_user_progress(username, materia):
 
 def update_user_level(username, materia, passed):
     levels = ["Nivel 1 (Novato)", "Nivel 2 (Estudiante)", "Nivel 3 (Interno)", "Nivel 4 (Residente)", "Nivel 5 (Especialista)"]
-    new_lvl = None
-    msg = ""
-
-    # Función lógica pura para calcular el nuevo nivel
+    
     def calc_next_level(current_prog):
         if materia in current_prog:
             lvl = current_prog[materia]['level']; xp = current_prog[materia]['xp']
@@ -313,12 +303,9 @@ def update_user_level(username, materia, passed):
     except: return None, None
 
 def get_user_decks(username):
-    # 1. Offline
     if 'offline_db' in st.session_state:
         if username in st.session_state.offline_db['decks']:
             return st.session_state.offline_db['decks'][username]
-    
-    # 2. Online
     if not db: return {}
     try:
         decks = db.collection('usuarios').document(username).collection('mazos').stream()
@@ -327,15 +314,11 @@ def get_user_decks(username):
 
 def save_user_deck(username, name, content, mat, sis):
     deck_data = {'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': str(time.time())}
-    
-    # 1. Guardar Offline
     if not db:
         if 'decks' not in st.session_state.offline_db: st.session_state.offline_db['decks'] = {}
         if username not in st.session_state.offline_db['decks']: st.session_state.offline_db['decks'][username] = {}
         st.session_state.offline_db['decks'][username][name] = deck_data
         return True
-
-    # 2. Guardar Online
     try:
         db.collection('usuarios').document(username).collection('mazos').document(name).set({
             'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': firestore.SERVER_TIMESTAMP
@@ -344,14 +327,11 @@ def save_user_deck(username, name, content, mat, sis):
     except: return False
 
 def delete_user_deck(username, name):
-    # 1. Borrar Offline
     if not db:
         if username in st.session_state.offline_db['decks'] and name in st.session_state.offline_db['decks'][username]:
             del st.session_state.offline_db['decks'][username][name]
             return True
         return False
-
-    # 2. Borrar Online
     try:
         db.collection('usuarios').document(username).collection('mazos').document(name).delete()
         return True
@@ -373,28 +353,39 @@ authenticator = stauth.Authenticate(
 if st.session_state["authentication_status"] is None:
     st.title("Med-Flash AI 🧬")
     
-    # Mensaje de Estado DB
     if not db:
-        st.warning("⚠️ Modo Offline Activado: Base de datos no conectada. Los datos se guardarán en esta sesión temporalmente.")
+        st.warning("⚠️ Modo Offline Activado: Datos temporales.")
     
     tab1, tab2 = st.tabs(["Login", "Registro"])
-    with tab1: authenticator.login('main')
+    with tab1: 
+        authenticator.login('main')
+        
+        # --- HERRAMIENTA DE DIAGNÓSTICO (Solo visible si hay problemas) ---
+        with st.expander("¿Problemas para entrar? Ver Usuarios Registrados"):
+            st.write("Si te registraste y no puedes entrar, verifica si tu usuario aparece aquí:")
+            usuarios_visibles = list(credentials_data['usernames'].keys())
+            st.write(usuarios_visibles)
+
     with tab2:
         with st.form("reg"):
-            u = st.text_input("Usuario"); p = st.text_input("Pass", type="password"); n = st.text_input("Nombre"); e = st.text_input("Email")
+            st.write("Crea tu cuenta:")
+            u = st.text_input("Usuario (Este usarás para entrar)", placeholder="ej. drdavid")
+            p = st.text_input("Contraseña", type="password")
+            n = st.text_input("Nombre Completo", placeholder="ej. Dr. David")
+            e = st.text_input("Email")
+            
             if st.form_submit_button("Registrar"):
                 res = register_new_user(n, e, u, p)
                 if res == "success": 
-                    st.success("¡Registrado! Ahora ve a la pestaña Login e inicia sesión.")
-                    # Recargamos credenciales para que el Login vea el nuevo usuario inmediatamente
-                    st.rerun()
+                    st.success(f"¡Cuenta creada para '{u}'! Ve a la pestaña Login.")
+                    time.sleep(1) # Dar tiempo para leer
+                    st.rerun() # Recargar para que el Login vea al usuario
                 else: st.error(res)
 
 elif st.session_state["authentication_status"]:
     username = st.session_state.get("username")
     name = st.session_state.get("name")
     
-    # LÓGICA DE NIVEL POR MATERIA:
     materia_display = st.session_state.materia_actual
     if materia_display == "Seleccionar Materia":
         nivel_actual = "Selecciona Materia"
