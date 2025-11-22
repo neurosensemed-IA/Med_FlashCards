@@ -1,4 +1,4 @@
-# CÓDIGO FINAL DE MED-FLASH AI (Versión Robusta con Diagnóstico)
+# CÓDIGO FINAL DE MED-FLASH AI (Versión con Puente de Memoria Anti-Latencia)
 import streamlit as st
 import time
 import json
@@ -179,9 +179,9 @@ if api_key_disponible:
     except Exception as e:
         pass
 
-# --- CAPA DE DATOS HÍBRIDA ---
+# --- CAPA DE DATOS HÍBRIDA (LATENCY FIX INCLUIDO) ---
 def get_all_users_credentials():
-    """Carga usuarios de DB o de memoria offline."""
+    """Carga usuarios de DB, memoria offline y puente de memoria."""
     try:
         test_hash = Hasher(['123']).generate()[0] 
     except Exception:
@@ -199,12 +199,7 @@ def get_all_users_credentials():
         }
     }
 
-    # 1. Cargar desde Memoria Offline (Prioridad local)
-    if 'offline_db' in st.session_state:
-        for u, data in st.session_state.offline_db['users'].items():
-            base_credentials['usernames'][u] = data
-
-    # 2. Cargar desde Firebase (Si existe)
+    # 1. Cargar desde Firebase (Si existe)
     if db:
         try:
             users_ref = db.collection('usuarios')
@@ -216,11 +211,17 @@ def get_all_users_credentials():
         except Exception as e:
             print(f"Error DB: {e}")
 
+    # 2. LATENCY FIX: Sobrescribir/Añadir con memoria local
+    # Esto asegura que el usuario recién creado esté disponible INMEDIATAMENTE
+    # incluso si Firebase tarda en responder.
+    if 'offline_db' in st.session_state:
+        for u, data in st.session_state.offline_db['users'].items():
+            base_credentials['usernames'][u] = data
+
     return base_credentials
 
 def register_new_user(name, email, username, password):
-    """Registra en DB o en memoria offline si DB falla."""
-    # Validación simple
+    """Registra en DB y en memoria local SIMULTÁNEAMENTE."""
     if not name or not email or not username or not password:
         return "Por favor completa todos los campos."
 
@@ -232,28 +233,29 @@ def register_new_user(name, email, username, password):
         'progreso': {} 
     }
 
-    # Intento Offline
-    if not db:
-        if username in st.session_state.offline_db['users']:
-            return "El usuario ya existe (Offline)."
-        st.session_state.offline_db['users'][username] = user_data
-        return "success"
+    # LATENCY FIX: Guardar SIEMPRE en memoria local primero
+    # Esto crea el "puente" para que el login funcione al instante
+    if 'offline_db' not in st.session_state:
+        st.session_state.offline_db = {'users': {}, 'decks': {}}
+    st.session_state.offline_db['users'][username] = user_data
 
-    # Intento Online
-    try:
-        doc_ref = db.collection('usuarios').document(username)
-        if doc_ref.get().exists: return "El usuario ya existe."
-        doc_ref.set(user_data)
-        return "success"
-    except Exception as e:
-        return f"Error técnico: {str(e)}"
+    # Intento Online (Si hay DB, lo mandamos a la nube también)
+    if db:
+        try:
+            doc_ref = db.collection('usuarios').document(username)
+            # Nota: No chequeamos existencia en DB para evitar doble latencia, 
+            # confiamos en la escritura (upsert/set).
+            doc_ref.set(user_data)
+        except Exception as e:
+            return f"Guardado localmente, pero error en nube: {str(e)}"
+
+    return "success"
 
 def get_user_progress(username, materia):
-    # 1. Buscar Offline
+    # 1. Buscar Offline (Prioridad por velocidad)
     if 'offline_db' in st.session_state and username in st.session_state.offline_db['users']:
         progreso = st.session_state.offline_db['users'][username].get('progreso', {})
         if materia in progreso: return progreso[materia]['level'], progreso[materia]['xp']
-        return "Nivel 1 (Novato)", 0
 
     # 2. Buscar Online
     if not db: return "Nivel 1 (Novato)", 0
@@ -288,13 +290,17 @@ def update_user_level(username, materia, passed):
         nl, nx, m = calc_next_level(user.get('progreso', {}))
         if 'progreso' not in user: user['progreso'] = {}
         user['progreso'][materia] = {'level': nl, 'xp': nx}
-        return nl, m
+        # No retornamos todavía, intentamos guardar en DB también
 
     # 2. Actualizar Online
-    if not db: return None, None
+    if not db: 
+        # Si no hay DB, retornamos el resultado offline
+        return nl, m if 'nl' in locals() else "" # Fallback simple
+        
     try:
         doc_ref = db.collection('usuarios').document(username)
-        data = doc_ref.get().to_dict()
+        # Fetch fresh data to be safe
+        data = doc_ref.get().to_dict() or {}
         progreso = data.get('progreso', {})
         nl, nx, m = calc_next_level(progreso)
         progreso[materia] = {'level': nl, 'xp': nx}
@@ -303,45 +309,62 @@ def update_user_level(username, materia, passed):
     except: return None, None
 
 def get_user_decks(username):
-    if 'offline_db' in st.session_state:
-        if username in st.session_state.offline_db['decks']:
-            return st.session_state.offline_db['decks'][username]
-    if not db: return {}
-    try:
-        decks = db.collection('usuarios').document(username).collection('mazos').stream()
-        return {d.id: d.to_dict() for d in decks}
-    except: return {}
+    # 1. Offline decks
+    decks = {}
+    if 'offline_db' in st.session_state and username in st.session_state.offline_db['decks']:
+        decks.update(st.session_state.offline_db['decks'][username])
+    
+    # 2. Online decks (Merge)
+    if db:
+        try:
+            stream = db.collection('usuarios').document(username).collection('mazos').stream()
+            for d in stream:
+                decks[d.id] = d.to_dict()
+        except: pass
+    return decks
 
 def save_user_deck(username, name, content, mat, sis):
     deck_data = {'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': str(time.time())}
-    if not db:
-        if 'decks' not in st.session_state.offline_db: st.session_state.offline_db['decks'] = {}
-        if username not in st.session_state.offline_db['decks']: st.session_state.offline_db['decks'][username] = {}
-        st.session_state.offline_db['decks'][username][name] = deck_data
-        return True
-    try:
-        db.collection('usuarios').document(username).collection('mazos').document(name).set({
-            'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': firestore.SERVER_TIMESTAMP
-        })
-        return True
-    except: return False
+    
+    # 1. Guardar Offline siempre
+    if 'offline_db' not in st.session_state: st.session_state.offline_db = {'users':{}, 'decks':{}}
+    if 'decks' not in st.session_state.offline_db: st.session_state.offline_db['decks'] = {}
+    if username not in st.session_state.offline_db['decks']: st.session_state.offline_db['decks'][username] = {}
+    st.session_state.offline_db['decks'][username][name] = deck_data
+
+    # 2. Guardar Online
+    if db:
+        try:
+            db.collection('usuarios').document(username).collection('mazos').document(name).set({
+                'preguntas': content, 'materia': mat, 'sistema': sis, 'creado': firestore.SERVER_TIMESTAMP
+            })
+        except: return False # Si falla la nube, al menos quedó local
+    
+    return True
 
 def delete_user_deck(username, name):
-    if not db:
-        if username in st.session_state.offline_db['decks'] and name in st.session_state.offline_db['decks'][username]:
+    success = False
+    # 1. Borrar Offline
+    if 'offline_db' in st.session_state and username in st.session_state.offline_db['decks']:
+        if name in st.session_state.offline_db['decks'][username]:
             del st.session_state.offline_db['decks'][username][name]
-            return True
-        return False
-    try:
-        db.collection('usuarios').document(username).collection('mazos').document(name).delete()
-        return True
-    except: return False
+            success = True
+
+    # 2. Borrar Online
+    if db:
+        try:
+            db.collection('usuarios').document(username).collection('mazos').document(name).delete()
+            success = True
+        except: pass
+    
+    return success
 
 # --- AUTHENTICATOR SETUP ---
 credentials_data = get_all_users_credentials()
 config = {
     'credentials': credentials_data,
-    'cookie': {'expiry_days': 30, 'key': 'medflash_key', 'name': 'medflash_cookie'},
+    # CAMBIAMOS EL NOMBRE DE LA COOKIE PARA FORZAR UN RESET LIMPIO
+    'cookie': {'expiry_days': 30, 'key': 'medflash_key_v2', 'name': 'medflash_cookie_v2'},
     'preauthorized': {'emails': []}
 }
 authenticator = stauth.Authenticate(
@@ -360,11 +383,10 @@ if st.session_state["authentication_status"] is None:
     with tab1: 
         authenticator.login('main')
         
-        # --- HERRAMIENTA DE DIAGNÓSTICO (Solo visible si hay problemas) ---
-        with st.expander("¿Problemas para entrar? Ver Usuarios Registrados"):
-            st.write("Si te registraste y no puedes entrar, verifica si tu usuario aparece aquí:")
-            usuarios_visibles = list(credentials_data['usernames'].keys())
-            st.write(usuarios_visibles)
+        # Diagnóstico visual para confirmar que el usuario "existe" para la app
+        with st.expander("Verificar Usuarios Disponibles"):
+            st.caption("Usuarios cargados en memoria (Login permitido):")
+            st.code(list(credentials_data['usernames'].keys()))
 
     with tab2:
         with st.form("reg"):
@@ -378,8 +400,8 @@ if st.session_state["authentication_status"] is None:
                 res = register_new_user(n, e, u, p)
                 if res == "success": 
                     st.success(f"¡Cuenta creada para '{u}'! Ve a la pestaña Login.")
-                    time.sleep(1) # Dar tiempo para leer
-                    st.rerun() # Recargar para que el Login vea al usuario
+                    time.sleep(1)
+                    st.rerun()
                 else: st.error(res)
 
 elif st.session_state["authentication_status"]:
